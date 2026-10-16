@@ -1,0 +1,39 @@
+{
+  "name": "ruveco",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "postinstall": "node scripts/copy-map-worker.mjs",
+    "dev": "next dev",
+    "dev:local": "firebase emulators:exec --project demo-ruveco --ui \"NEXT_PUBLIC_USE_EMULATORS=1 next dev\"",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint",
+    "typecheck": "tsc --noEmit",
+    "seed:companies": "node --env-file=.env.local scripts/seed-vehicle-companies.mjs",
+    "deploy:rules": "firebase deploy --only firestore:rules,database,storage",
+    "test:e2e": "node scripts/e2e-smoke.mjs"
+  },
+  "dependencies": {
+    "firebase": "^13.0.0",
+    "firebase-admin": "^14.5.0",
+    "lucide-react": "^1.55.0",
+    "maplibre-gl": "^6.13.0",
+    "motion": "^14.1.0",
+    "next": "16.4.0",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "sonner": "^2.0.8",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@tailwindcss/turbopack": "^4",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "eslint": "^9",
+    "eslint-config-next": "16.4.0",
+    "tailwindcss": "^4",
+    "typescript": "^5"
+  }
+}

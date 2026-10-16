@@ -1,0 +1,48 @@
+rules_version = '2';
+
+// Clients only read. Every write goes through the Next.js API routes (Admin SDK),
+// so status and ownership can never be changed from a browser.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+    function isParty() {
+      return signedIn()
+        && (resource.data.ownerId == request.auth.uid || resource.data.driverId == request.auth.uid);
+    }
+
+    match /users/{uid} {
+      allow read: if signedIn() && request.auth.uid == uid;
+    }
+
+    // License and photos: the driver only.
+    match /drivers/{uid} {
+      allow read: if signedIn() && request.auth.uid == uid;
+    }
+
+    match /vehicles/{vehicleId} {
+      allow read: if signedIn() && resource.data.ownerId == request.auth.uid;
+    }
+
+    match /vehicleCompanies/{companyId} {
+      allow read: if signedIn();
+    }
+
+    match /trips/{tripId} {
+      allow read: if isParty();
+    }
+
+    match /tripRoutes/{tripId} {
+      allow read: if isParty();
+    }
+
+    match /notifications/{notificationId} {
+      allow read: if signedIn() && resource.data.userId == request.auth.uid;
+      // The only client write in the app: marking a notification as read.
+      allow update: if signedIn()
+        && resource.data.userId == request.auth.uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['readAt']);
+    }
+  }
+}

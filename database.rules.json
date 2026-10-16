@@ -1,0 +1,23 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+    "tracking": {
+      "$tripId": {
+        ".read": "auth != null && (root.child('tripAccess').child($tripId).child('ownerId').val() === auth.uid || root.child('tripAccess').child($tripId).child('driverId').val() === auth.uid)",
+        ".write": "auth != null && root.child('tripAccess').child($tripId).child('driverId').val() === auth.uid && root.child('tripAccess').child($tripId).child('status').val() === 'in_progress'",
+        "latest": {
+          ".validate": "newData.hasChildren(['lat', 'lng', 't']) && newData.child('lat').isNumber() && newData.child('lng').isNumber() && newData.child('t').isNumber()"
+        },
+        "points": {
+          "$time": {
+            ".validate": "newData.hasChildren(['lat', 'lng', 't']) && newData.child('lat').isNumber() && newData.child('lat').val() >= -90 && newData.child('lat').val() <= 90 && newData.child('lng').isNumber() && newData.child('lng').val() >= -180 && newData.child('lng').val() <= 180 && newData.child('t').isNumber()"
+          }
+        },
+        "$other": {
+          ".validate": false
+        }
+      }
+    }
+  }
+}
