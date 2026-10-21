@@ -10,11 +10,20 @@ export async function loadTrip(id: string): Promise<Trip> {
   return { ...snap.data(), id } as Trip;
 }
 
-/** Queues an in-app notification inside a transaction or batch. */
-export function addNotification(
-  writer: Transaction | WriteBatch,
-  input: { userId: string; tripId: string; tripCode: string; message: string },
-) {
+export interface NotificationInput {
+  userId: string;
+  tripId: string;
+  tripCode: string;
+  /** Short heading for the phone notification, for example "Trip started". */
+  title: string;
+  message: string;
+}
+
+/**
+ * Queues an in-app notification inside a transaction or batch.
+ * After the write commits, pass the same input to `sendPush` so the user's phones get it too.
+ */
+export function addNotification(writer: Transaction | WriteBatch, input: NotificationInput) {
   const ref = adminDb().collection("notifications").doc();
   const data = { ...input, readAt: null, createdAt: Date.now() };
   // Transaction and WriteBatch share the same set() shape.

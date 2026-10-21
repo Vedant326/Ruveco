@@ -2,6 +2,7 @@ import { cert, getApps, initializeApp, type App } from "firebase-admin/app";
 import { getAuth } from "firebase-admin/auth";
 import { getDatabase } from "firebase-admin/database";
 import { getFirestore } from "firebase-admin/firestore";
+import { getMessaging } from "firebase-admin/messaging";
 import { getStorage } from "firebase-admin/storage";
 
 const usingEmulators = process.env.NEXT_PUBLIC_USE_EMULATORS === "1";
@@ -39,3 +40,4 @@ export const adminAuth = () => getAuth(init());
 export const adminDb = () => getFirestore(init());
 export const adminRtdb = () => getDatabase(init());
 export const adminBucket = () => getStorage(init()).bucket();
+export const adminMessaging = () => getMessaging(init());

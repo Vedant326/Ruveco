@@ -5,7 +5,15 @@ import { z } from "zod";
 import { ALLOWED_FILE_TYPES, DOC_TYPES, GOODS_UNITS } from "@/lib/constants";
 import { adminBucket, adminDb } from "@/lib/firebase/admin";
 import { ApiError, handle, loadProfile, requireSession, type Session } from "@/lib/server/http";
-import { addNotification, loadTrip, newTrackingToken, syncTrackingToken, syncTripAccess } from "@/lib/server/trips";
+import { sendPush } from "@/lib/server/push";
+import {
+  addNotification,
+  loadTrip,
+  newTrackingToken,
+  syncTrackingToken,
+  syncTripAccess,
+  type NotificationInput,
+} from "@/lib/server/trips";
 import type { Trip, TripDocument } from "@/lib/types";
 
 type Ctx = { params: Promise<{ id: string; action: string }> };
@@ -77,6 +85,7 @@ async function startTrip(trip: Trip) {
   const ref = db.doc(`trips/${trip.id}`);
 
   // Safe to call twice: a retry after a dropped connection just re-syncs.
+  const notes: NotificationInput[] = [];
   if (trip.status !== "in_progress") {
     if (trip.status !== "scheduled") throw new ApiError(409, "Only a scheduled trip can be started.");
 
@@ -86,21 +95,24 @@ async function startTrip(trip: Trip) {
     }
 
     const started = { status: "in_progress" as const, startedAt: Date.now(), trackingToken: newTrackingToken() };
+    const note: NotificationInput = {
+      userId: trip.ownerId,
+      tripId: trip.id,
+      tripCode: trip.tripCode,
+      title: "Trip started",
+      message: `Trip ${trip.tripCode} has started. Driver ${trip.driverName}, vehicle ${trip.vehicleNumber}`,
+    };
     await db.runTransaction(async (tx) => {
       const fresh = await tx.get(ref);
       if (fresh.get("status") !== "scheduled") throw new ApiError(409, "Only a scheduled trip can be started.");
       tx.update(ref, started);
-      addNotification(tx, {
-        userId: trip.ownerId,
-        tripId: trip.id,
-        tripCode: trip.tripCode,
-        message: `Trip ${trip.tripCode} has started. Driver ${trip.driverName}, vehicle ${trip.vehicleNumber}`,
-      });
+      addNotification(tx, note);
     });
     Object.assign(trip, started);
+    notes.push(note);
   }
 
-  await Promise.all([syncTripAccess(trip), syncTrackingToken(trip)]);
+  await Promise.all([syncTripAccess(trip), syncTrackingToken(trip), sendPush(notes)]);
   return { status: trip.status };
 }
 
@@ -108,26 +120,30 @@ async function endTrip(trip: Trip) {
   const db = adminDb();
   const ref = db.doc(`trips/${trip.id}`);
 
+  const notes: NotificationInput[] = [];
   if (trip.status !== "completed") {
     if (trip.status !== "in_progress") throw new ApiError(409, "Only a trip in progress can be ended.");
 
     const ended = { status: "completed" as const, completedAt: Date.now() };
+    const note: NotificationInput = {
+      userId: trip.ownerId,
+      tripId: trip.id,
+      tripCode: trip.tripCode,
+      title: "Trip completed",
+      message: `Trip ${trip.tripCode} is completed. Driver ${trip.driverName}, vehicle ${trip.vehicleNumber}`,
+    };
     await db.runTransaction(async (tx) => {
       const fresh = await tx.get(ref);
       if (fresh.get("status") !== "in_progress") throw new ApiError(409, "Only a trip in progress can be ended.");
       tx.update(ref, ended);
-      addNotification(tx, {
-        userId: trip.ownerId,
-        tripId: trip.id,
-        tripCode: trip.tripCode,
-        message: `Trip ${trip.tripCode} is completed. Driver ${trip.driverName}, vehicle ${trip.vehicleNumber}`,
-      });
+      addNotification(tx, note);
     });
     Object.assign(trip, ended);
+    notes.push(note);
   }
 
   // Closing access stops any further GPS writes for this trip.
-  await Promise.all([syncTripAccess(trip), syncTrackingToken(trip)]);
+  await Promise.all([syncTripAccess(trip), syncTrackingToken(trip), sendPush(notes)]);
   return { status: trip.status };
 }
 
@@ -135,19 +151,21 @@ async function cancelTrip(trip: Trip, reason: string) {
   const db = adminDb();
   const ref = db.doc(`trips/${trip.id}`);
 
+  const note: NotificationInput = {
+    userId: trip.driverId,
+    tripId: trip.id,
+    tripCode: trip.tripCode,
+    title: "Trip cancelled",
+    message: `Trip ${trip.tripCode} was cancelled by ${trip.companyName || "the owner"}.`,
+  };
   await db.runTransaction(async (tx) => {
     const fresh = await tx.get(ref);
     if (fresh.get("status") !== "scheduled") throw new ApiError(409, "Only a scheduled trip can be cancelled.");
     tx.update(ref, { status: "cancelled", cancelReason: reason, cancelledAt: Date.now() });
-    addNotification(tx, {
-      userId: trip.driverId,
-      tripId: trip.id,
-      tripCode: trip.tripCode,
-      message: `Trip ${trip.tripCode} was cancelled by ${trip.companyName || "the owner"}.`,
-    });
+    addNotification(tx, note);
   });
 
-  await syncTripAccess({ ...trip, status: "cancelled" });
+  await Promise.all([syncTripAccess({ ...trip, status: "cancelled" }), sendPush([note])]);
   return { status: "cancelled" };
 }
 

@@ -4,7 +4,8 @@ import { adminDb } from "@/lib/firebase/admin";
 import { todayIST } from "@/lib/format";
 import { ApiError, handle, requireRole } from "@/lib/server/http";
 import { downsample, getRoute } from "@/lib/server/routing";
-import { addNotification, syncTripAccess } from "@/lib/server/trips";
+import { sendPush } from "@/lib/server/push";
+import { addNotification, syncTripAccess, type NotificationInput } from "@/lib/server/trips";
 import type { Trip } from "@/lib/types";
 
 const place = z.object({
@@ -96,15 +97,23 @@ export const POST = handle(async (req) => {
       driverId: trip.driverId,
       coords: downsample(route.coords, 300).flat(),
     });
-    addNotification(tx, {
-      userId: trip.driverId,
-      tripId: tripRef.id,
-      tripCode: code,
-      message: `New trip ${code} assigned to you. Vehicle ${trip.vehicleNumber}.`,
-    });
+    addNotification(tx, assigned(code));
     return code;
   });
 
-  await syncTripAccess({ id: tripRef.id, ownerId: trip.ownerId, driverId: trip.driverId, status: "scheduled" });
+  await Promise.all([
+    syncTripAccess({ id: tripRef.id, ownerId: trip.ownerId, driverId: trip.driverId, status: "scheduled" }),
+    sendPush([assigned(tripCode)]),
+  ]);
   return { id: tripRef.id, tripCode };
+
+  function assigned(code: string): NotificationInput {
+    return {
+      userId: trip.driverId,
+      tripId: tripRef.id,
+      tripCode: code,
+      title: "New trip assigned",
+      message: `New trip ${code} assigned to you. Vehicle ${trip.vehicleNumber}.`,
+    };
+  }
 });
