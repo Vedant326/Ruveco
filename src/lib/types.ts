@@ -16,7 +16,10 @@ export interface UserProfile {
   email: string | null;
   displayName: string | null;
   role: Role | null;
+  /** Owner: the company they registered. Driver: the company they work for. */
   companyName: string | null;
+  /** Key of the `companies` document. Missing on accounts from before company names were unique. */
+  companyId?: string | null;
   profileComplete: boolean;
   createdAt: number;
 }

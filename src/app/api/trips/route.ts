@@ -46,7 +46,9 @@ export const POST = handle(async (req) => {
   if (!vehicleSnap.exists || vehicleSnap.get("ownerId") !== session.uid) {
     throw new ApiError(400, "Choose one of your registered vehicles");
   }
-  if (!driverSnap.exists) throw new ApiError(400, "Choose a registered driver");
+  if (!driverSnap.exists || driverSnap.get("ownerId") !== session.uid) {
+    throw new ApiError(400, "Choose a driver registered under your company");
+  }
 
   const route = await getRoute(body.source, body.destination);
   const tripRef = db.collection("trips").doc();

@@ -3,20 +3,23 @@
 import { Camera, CircleCheck, ImageUp, RotateCcw } from "lucide-react";
 import { useState, type FormEvent } from "react";
 import { useAuth } from "@/components/auth-provider";
+import { CompanySelect } from "@/components/company-select";
 import { FaceCapture } from "@/components/face-capture";
 import { Button } from "@/components/ui/button";
 import { Field, Input, Textarea } from "@/components/ui/field";
+import type { Option } from "@/components/ui/search-select";
 import { api, errorMessage } from "@/lib/api";
 import { PHONE_RE } from "@/lib/constants";
 import { cx } from "@/lib/format";
 import { uploadFile, validateFile } from "@/lib/uploads";
 
-type Errors = Partial<Record<"name" | "phone" | "address" | "license" | "licensePhoto" | "email" | "face" | "consent" | "form", string>>;
+type Errors = Partial<Record<"name" | "phone" | "company" | "address" | "license" | "licensePhoto" | "email" | "face" | "consent" | "form", string>>;
 
 export default function DriverProfilePage() {
   const { user, profile } = useAuth();
   const [name, setName] = useState(profile?.displayName ?? "");
   const [phone, setPhone] = useState(profile?.phone ?? "");
+  const [company, setCompany] = useState<Option | null>(null);
   const [address, setAddress] = useState("");
   const [license, setLicense] = useState("");
   const [email, setEmail] = useState(profile?.email ?? "");
@@ -33,6 +36,7 @@ export default function DriverProfilePage() {
     const e: Errors = {};
     if (!name.trim()) e.name = "Enter your name";
     if (!PHONE_RE.test(phone)) e.phone = "Enter a valid 10-digit mobile number";
+    if (!company) e.company = "Choose your company";
     if (!address.trim()) e.address = "Enter your address";
     if (license.trim().length < 4) e.license = "Enter your driving license number";
     if (!licensePhoto) e.licensePhoto = "Upload a photo of your license";
@@ -66,6 +70,7 @@ export default function DriverProfilePage() {
           address: address.trim(),
           licenseNumber: license.trim(),
           email: email.trim(),
+          companyId: company!.value,
           licensePhotoPath,
           facePhotoPath,
           consent: true,
@@ -83,7 +88,7 @@ export default function DriverProfilePage() {
     <form onSubmit={submit} noValidate className="grid gap-5 sm:grid-cols-2 sm:gap-x-6">
       <div className="sm:col-span-2">
         <h1 className="text-2xl font-extrabold tracking-tight text-ink lg:text-3xl">Create your profile</h1>
-        <p className="mt-1.5 text-sm text-muted">One-time setup. Owners will find you by your name or phone number.</p>
+        <p className="mt-1.5 text-sm text-muted">One-time setup. Your company&apos;s owner will find you by your name or phone number.</p>
       </div>
 
       <Field label="Name" required error={errors.name}>
@@ -100,6 +105,10 @@ export default function DriverProfilePage() {
           invalid={Boolean(errors.phone)}
           onChange={(e) => (setPhone(e.target.value.replace(/\D/g, "").slice(0, 10)), clear("phone"))}
         />
+      </Field>
+
+      <Field as="div" label="Your company" required error={errors.company} className="sm:col-span-2">
+        <CompanySelect value={company} onChange={(o) => (setCompany(o), clear("company"))} invalid={Boolean(errors.company)} />
       </Field>
 
       <Field label="Address" required error={errors.address} className="sm:col-span-2">

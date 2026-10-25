@@ -16,6 +16,7 @@ interface DriverRecord {
   address: string;
   licenseNumber: string;
   email: string;
+  companyName?: string;
   consentAt: number;
 }
 
@@ -53,6 +54,9 @@ export default function DriverProfileViewPage() {
             <dl className="grid gap-4 sm:grid-cols-2">
               <Detail label="Driving license number">{driver.licenseNumber}</Detail>
               <Detail label="Email">{driver.email}</Detail>
+              <Detail label="Company" className="sm:col-span-2">
+                {driver.companyName}
+              </Detail>
               <Detail label="Address" className="sm:col-span-2">
                 {driver.address}
               </Detail>

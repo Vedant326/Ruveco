@@ -29,8 +29,10 @@ export function useAuth() {
 /** Where a signed-in user belongs, based on how far through sign-up they are. */
 export function homeFor(profile: UserProfile | null) {
   if (!profile?.role) return "/onboarding/role";
-  if (profile.role === "owner") return profile.companyName ? "/owner" : "/onboarding/company";
-  return profile.profileComplete ? "/driver" : "/onboarding/driver";
+  // Accounts from before company names were unique confirm their company once.
+  if (profile.role === "owner") return profile.companyId ? "/owner" : "/onboarding/company";
+  if (!profile.profileComplete) return "/onboarding/driver";
+  return profile.companyId ? "/driver" : "/onboarding/driver-company";
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {

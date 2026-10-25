@@ -203,7 +203,7 @@ export default function CreateTripPage() {
                 title="Choose a driver"
                 placeholder="Search by name or phone"
                 searchPlaceholder="Name or phone number"
-                emptyText="No registered driver found. Ask the driver to sign up and complete their profile."
+                emptyText="No driver found. Drivers show here after they sign up and choose your company."
                 invalid={Boolean(errors.driver)}
                 icon={<User className="h-4 w-4" />}
               />
