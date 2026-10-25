@@ -21,6 +21,12 @@ service firebase.storage {
       allow write: if request.auth != null && request.auth.uid == uid && validFile();
     }
 
+    // Vehicle documents (RC, insurance, PUC and so on): only the owner. Files are never replaced or deleted.
+    match /vehicles/{uid}/{vehicleId}/{fileName} {
+      allow read: if request.auth != null && request.auth.uid == uid;
+      allow create: if request.auth != null && request.auth.uid == uid && validFile();
+    }
+
     // Trip documents: the trip's owner and its assigned driver. Files are never replaced or deleted.
     match /trips/{tripId}/{fileName} {
       allow read: if request.auth != null && isTripParty(tripId);

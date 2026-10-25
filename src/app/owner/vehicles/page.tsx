@@ -1,10 +1,11 @@
 "use client";
 
 import { collection, getDocs } from "firebase/firestore";
-import { Building2, CircleCheck } from "lucide-react";
+import { Building2, ChevronRight, CircleCheck, Eye, FileText, Plus, X } from "lucide-react";
 import { useEffect, useState, type FormEvent } from "react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/app-shell";
+import { useAuth } from "@/components/auth-provider";
 import { TruckArt } from "@/components/brand/illustrations";
 import { useOwnerData } from "@/components/data-providers";
 import { Button } from "@/components/ui/button";
@@ -12,12 +13,31 @@ import { Field, Input } from "@/components/ui/field";
 import { Card, EmptyState, ErrorState, SectionTitle, SkeletonList } from "@/components/ui/misc";
 import { Stagger, StaggerItem } from "@/components/ui/motion";
 import { SearchSelect, type Option } from "@/components/ui/search-select";
+import { Sheet } from "@/components/ui/sheet";
+import { AddDocumentSheet, type PendingDocument } from "@/components/trip/documents";
 import { api, errorMessage } from "@/lib/api";
-import { normalizePlate, PLATE_RE, VEHICLE_TYPES } from "@/lib/constants";
+import { normalizePlate, PLATE_RE, VEHICLE_DOC_TYPES, VEHICLE_TYPES } from "@/lib/constants";
 import fallbackCompanies from "@/lib/data/vehicle-companies.json";
 import { fb } from "@/lib/firebase/client";
-import { cx } from "@/lib/format";
-import type { VehicleType } from "@/lib/types";
+import { cx, fmtDateTime } from "@/lib/format";
+import type { Vehicle, VehicleDocType, VehicleType } from "@/lib/types";
+import { openFile, safeFileName, uploadFile } from "@/lib/uploads";
+
+type PendingVehicleDocument = PendingDocument<VehicleDocType>;
+
+/** Uploads the file, then records it on the vehicle. */
+async function uploadVehicleDocument(uid: string, vehicleId: string, pending: PendingVehicleDocument) {
+  const path = `vehicles/${uid}/${vehicleId}/${crypto.randomUUID()}-${safeFileName(pending.file.name)}`;
+  await uploadFile(path, pending.file);
+  await api(`/api/vehicles/${vehicleId}/document`, {
+    body: { type: pending.type, name: pending.name, fileName: pending.file.name, path },
+  });
+}
+
+/** Label for a document chosen but not uploaded yet. */
+function pendingTitle(doc: PendingVehicleDocument) {
+  return doc.type === "other" ? doc.name : VEHICLE_DOC_TYPES.find((d) => d.value === doc.type)?.label;
+}
 
 /** Vehicle companies from the `vehicleCompanies` table; the bundled list is used until it is seeded. */
 function useVehicleCompanies() {
@@ -34,6 +54,7 @@ function useVehicleCompanies() {
 }
 
 export default function VehiclesPage() {
+  const { user } = useAuth();
   const { vehicles } = useOwnerData();
   const companies = useVehicleCompanies();
   const [number, setNumber] = useState("");
@@ -41,6 +62,11 @@ export default function VehiclesPage() {
   const [company, setCompany] = useState<Option | null>(null);
   const [errors, setErrors] = useState<{ number?: string; type?: string; company?: string }>({});
   const [busy, setBusy] = useState(false);
+  const [documents, setDocuments] = useState<PendingVehicleDocument[]>([]);
+  const [docOpen, setDocOpen] = useState(false);
+  // By ID, so the sheet shows new documents as soon as they are saved.
+  const [openId, setOpenId] = useState<string | null>(null);
+  const openVehicle = vehicles.items.find((v) => v.id === openId) ?? null;
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
@@ -53,11 +79,23 @@ export default function VehiclesPage() {
 
     setBusy(true);
     try {
-      await api("/api/vehicles", { body: { number, type, company: company!.value } });
-      toast.success(`${number} added`, { icon: <CircleCheck className="h-4 w-4 text-emerald-600" /> });
+      const created = await api<{ id: string }>("/api/vehicles", { body: { number, type, company: company!.value } });
+      toast.success(documents.length ? `${number} added. Uploading documents…` : `${number} added`, {
+        icon: <CircleCheck className="h-4 w-4 text-emerald-600" />,
+      });
       setNumber("");
       setType(null);
       setCompany(null);
+      // Documents need the vehicle ID, so they upload now, all at once, while the form is free again.
+      const pending = documents;
+      setDocuments([]);
+      if (pending.length) {
+        void Promise.allSettled(pending.map((doc) => uploadVehicleDocument(user!.uid, created.id, doc))).then((results) => {
+          const failed = results.filter((r) => r.status === "rejected").length;
+          if (failed) toast.warning(`${failed} document${failed > 1 ? "s" : ""} for ${number} could not be uploaded. Tap the vehicle to add ${failed > 1 ? "them" : "it"} again.`);
+          else toast.success(`Documents for ${number} uploaded`);
+        });
+      }
     } catch (err) {
       const message = errorMessage(err);
       if (message.includes("already added")) setErrors({ number: message });
@@ -132,6 +170,38 @@ export default function VehiclesPage() {
             />
           </Field>
 
+          <div>
+            <div className="mb-2 flex items-center justify-between">
+              <span className="text-sm font-semibold text-ink">Documents</span>
+              <Button size="sm" variant="secondary" icon={<Plus className="h-4 w-4" />} onClick={() => setDocOpen(true)}>
+                Add
+              </Button>
+            </div>
+            {documents.length === 0 ? (
+              <p className="text-sm text-muted">RC, insurance, PUC, permit or other files. You can also add them later.</p>
+            ) : (
+              <ul className="space-y-2">
+                {documents.map((doc, i) => (
+                  <li key={i} className="flex items-center gap-3 rounded-2xl border border-line p-3">
+                    <FileText className="h-5 w-5 shrink-0 text-brand-600" />
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-semibold text-ink">{pendingTitle(doc)}</p>
+                      <p className="truncate text-xs text-muted">{doc.file.name}</p>
+                    </div>
+                    <button
+                      type="button"
+                      aria-label="Remove document"
+                      onClick={() => setDocuments((list) => list.filter((_, j) => j !== i))}
+                      className="grid h-8 w-8 cursor-pointer place-items-center rounded-full text-muted hover:bg-rose-50 hover:text-rose-600"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+
           <Button type="submit" block loading={busy}>
             Save vehicle
           </Button>
@@ -152,21 +222,109 @@ export default function VehiclesPage() {
           <Stagger className="grid gap-3 sm:grid-cols-2">
             {vehicles.items.map((v) => (
               <StaggerItem key={v.id}>
-                <div className="flex items-center gap-3 rounded-3xl border border-line/70 bg-white p-3.5 shadow-card">
+                <button
+                  type="button"
+                  onClick={() => setOpenId(v.id)}
+                  className="flex w-full cursor-pointer items-center gap-3 rounded-3xl border border-line/70 bg-white p-3.5 text-left shadow-card transition-colors hover:border-brand-300"
+                >
                   <span className="grid h-14 w-20 shrink-0 place-items-center rounded-2xl bg-brand-50 px-2">
                     <TruckArt type={v.type} className="w-full" />
                   </span>
                   <div className="min-w-0">
                     <p className="truncate text-[15px] font-bold tracking-wide text-ink">{v.number}</p>
                     <p className="truncate text-sm text-muted">{v.company}</p>
+                    <p className="mt-0.5 flex items-center gap-1 text-xs font-medium text-brand-600">
+                      <FileText className="h-3.5 w-3.5" /> {documentCount(v)}
+                    </p>
                   </div>
                   <span className="ml-auto rounded-full bg-brand-100 px-2.5 py-1 text-xs font-bold text-brand-700">{v.type}</span>
-                </div>
+                  <ChevronRight className="h-4 w-4 shrink-0 text-muted" />
+                </button>
               </StaggerItem>
             ))}
           </Stagger>
         )}
       </section>
+
+      <AddDocumentSheet
+        types={VEHICLE_DOC_TYPES}
+        namePlaceholder="Road tax receipt"
+        open={docOpen}
+        onClose={() => setDocOpen(false)}
+        onAdd={(doc) => setDocuments((list) => [...list, doc])}
+      />
+      <VehicleDocumentsSheet vehicle={openVehicle} onClose={() => setOpenId(null)} />
+    </>
+  );
+}
+
+function documentCount(v: Vehicle) {
+  const count = v.documents?.length ?? 0;
+  return count === 0 ? "No documents" : `${count} document${count > 1 ? "s" : ""}`;
+}
+
+/** A registered vehicle's documents: view each one, and add more. */
+function VehicleDocumentsSheet({ vehicle, onClose }: { vehicle: Vehicle | null; onClose: () => void }) {
+  const [adding, setAdding] = useState(false);
+  const documents = [...(vehicle?.documents ?? [])].sort((a, b) => b.uploadedAt - a.uploadedAt);
+
+  const view = async (path: string) => {
+    try {
+      await openFile(path);
+    } catch {
+      toast.error("Could not open this file. Please try again.");
+    }
+  };
+
+  return (
+    <>
+      <Sheet open={Boolean(vehicle) && !adding} onClose={onClose} title={vehicle?.number ?? ""} description={vehicle ? `${vehicle.company} · ${vehicle.type}` : undefined}>
+        <SectionTitle
+          action={
+            <Button size="sm" variant="secondary" icon={<Plus className="h-4 w-4" />} onClick={() => setAdding(true)}>
+              Add
+            </Button>
+          }
+        >
+          Documents
+        </SectionTitle>
+        {documents.length === 0 ? (
+          <p className="flex items-center gap-2 py-2 text-sm text-muted">
+            <FileText className="h-4 w-4" /> No documents uploaded yet
+          </p>
+        ) : (
+          <ul className="space-y-2">
+            {documents.map((d) => (
+              <li key={d.id} className="flex items-center gap-3 rounded-2xl border border-line p-3">
+                <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-brand-50 text-brand-600">
+                  <FileText className="h-5 w-5" />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-semibold text-ink">{d.name}</p>
+                  <p className="truncate text-xs text-muted">
+                    {d.fileName} · {fmtDateTime(d.uploadedAt)}
+                  </p>
+                </div>
+                <Button size="sm" variant="ghost" icon={<Eye className="h-4 w-4" />} onClick={() => view(d.path)}>
+                  View
+                </Button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Sheet>
+      {vehicle && (
+        <AddDocumentSheet
+          types={VEHICLE_DOC_TYPES}
+          namePlaceholder="Road tax receipt"
+          open={adding}
+          onClose={() => setAdding(false)}
+          onAdd={async (pending) => {
+            await uploadVehicleDocument(vehicle.ownerId, vehicle.id, pending);
+            toast.success("Document uploaded");
+          }}
+        />
+      )}
     </>
   );
 }

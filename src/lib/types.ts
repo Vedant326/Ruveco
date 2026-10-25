@@ -2,6 +2,7 @@ export type Role = "owner" | "driver";
 export type TripStatus = "scheduled" | "in_progress" | "completed" | "cancelled";
 export type VehicleType = "LCV" | "MCV" | "HCV";
 export type DocType = "eway" | "gst" | "other";
+export type VehicleDocType = "rc" | "insurance" | "puc" | "permit" | "fitness" | "other";
 
 export interface Place {
   address: string;
@@ -26,7 +27,18 @@ export interface Vehicle {
   number: string;
   type: VehicleType;
   company: string;
+  /** Missing on vehicles added before vehicle documents existed. */
+  documents?: VehicleDocument[];
   createdAt: number;
+}
+
+export interface VehicleDocument {
+  id: string;
+  type: VehicleDocType;
+  name: string;
+  fileName: string;
+  path: string;
+  uploadedAt: number;
 }
 
 export interface DriverSummary {

@@ -329,7 +329,7 @@ export default function CreateTripPage() {
         </div>
       </div>
 
-      <AddDocumentSheet open={docOpen} onClose={() => setDocOpen(false)} onAdd={(doc) => setDocuments((list) => [...list, doc])} />
+      <AddDocumentSheet types={DOC_TYPES} open={docOpen} onClose={() => setDocOpen(false)} onAdd={(doc) => setDocuments((list) => [...list, doc])} />
     </form>
   );
 }

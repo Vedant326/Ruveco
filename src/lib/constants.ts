@@ -1,4 +1,4 @@
-import type { DocType, TripStatus, VehicleType } from "./types";
+import type { DocType, TripStatus, VehicleDocType, VehicleType } from "./types";
 
 export const VEHICLE_TYPES: { value: VehicleType; label: string; range: string }[] = [
   { value: "LCV", label: "LCV", range: "up to 7.5 ton" },
@@ -9,6 +9,15 @@ export const VEHICLE_TYPES: { value: VehicleType; label: string; range: string }
 export const DOC_TYPES: { value: DocType; label: string }[] = [
   { value: "eway", label: "E-way bill" },
   { value: "gst", label: "GST bill" },
+  { value: "other", label: "Other" },
+];
+
+export const VEHICLE_DOC_TYPES: { value: VehicleDocType; label: string }[] = [
+  { value: "rc", label: "RC" },
+  { value: "insurance", label: "Insurance" },
+  { value: "puc", label: "PUC" },
+  { value: "permit", label: "Permit" },
+  { value: "fitness", label: "Fitness certificate" },
   { value: "other", label: "Other" },
 ];
 

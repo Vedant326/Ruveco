@@ -13,8 +13,8 @@ import { fmtDateTime } from "@/lib/format";
 import type { DocType, Trip } from "@/lib/types";
 import { openFile, safeFileName, uploadFile, validateFile } from "@/lib/uploads";
 
-export interface PendingDocument {
-  type: DocType;
+export interface PendingDocument<T extends string = DocType> {
+  type: T;
   name: string;
   file: File;
 }
@@ -28,18 +28,23 @@ export async function uploadTripDocument(tripId: string, pending: PendingDocumen
   });
 }
 
-/** Add document dialog: type (E-way bill, GST bill or Other), then the file. */
-export function AddDocumentSheet({
+/** Add document dialog: type (for a trip E-way bill, GST bill or Other), then the file. */
+export function AddDocumentSheet<T extends string>({
   open,
   onClose,
   onAdd,
+  types,
+  namePlaceholder = "Weighbridge slip",
 }: {
   open: boolean;
   onClose: () => void;
   /** May be async; the sheet shows a spinner and stays open if it throws. */
-  onAdd: (document: PendingDocument) => void | Promise<void>;
+  onAdd: (document: PendingDocument<T>) => void | Promise<void>;
+  /** The first one is preselected. A type "other" asks for a name. */
+  types: { value: T; label: string }[];
+  namePlaceholder?: string;
 }) {
-  const [type, setType] = useState<DocType>("eway");
+  const [type, setType] = useState<T>(types[0].value);
   const [name, setName] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -56,7 +61,7 @@ export function AddDocumentSheet({
       await onAdd({ type, name: name.trim(), file });
       setFile(null);
       setName("");
-      setType("eway");
+      setType(types[0].value);
       onClose();
     } catch (err) {
       setError(errorMessage(err));
@@ -69,8 +74,8 @@ export function AddDocumentSheet({
     <Sheet open={open} onClose={onClose} title="Add document" description="PDF, JPG or PNG, up to 10 MB.">
       <div className="space-y-4">
         <Field label="Document type" required>
-          <Select value={type} onChange={(e) => setType(e.target.value as DocType)}>
-            {DOC_TYPES.map((d) => (
+          <Select value={type} onChange={(e) => setType(e.target.value as T)}>
+            {types.map((d) => (
               <option key={d.value} value={d.value}>
                 {d.label}
               </option>
@@ -79,7 +84,7 @@ export function AddDocumentSheet({
         </Field>
         {type === "other" && (
           <Field label="Document name" required>
-            <Input value={name} maxLength={60} placeholder="Weighbridge slip" onChange={(e) => setName(e.target.value)} />
+            <Input value={name} maxLength={60} placeholder={namePlaceholder} onChange={(e) => setName(e.target.value)} />
           </Field>
         )}
         <Field label="File" required>
@@ -163,6 +168,7 @@ export function DocumentsCard({ trip, canAdd }: { trip: Trip; canAdd: boolean })
       )}
 
       <AddDocumentSheet
+        types={DOC_TYPES}
         open={open}
         onClose={() => setOpen(false)}
         onAdd={async (pending) => {
