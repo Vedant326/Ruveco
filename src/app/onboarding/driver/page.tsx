@@ -44,7 +44,7 @@ export default function DriverProfilePage() {
       const problem = validateFile(licensePhoto, true);
       if (problem) e.licensePhoto = problem;
     }
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) e.email = "Enter a valid email address";
+    if (email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) e.email = "Enter a valid email address";
     if (!face) e.face = "Take a face photo";
     if (!consent) e.consent = "Please accept to continue";
     return e;
@@ -119,7 +119,7 @@ export default function DriverProfilePage() {
         <Input value={license} maxLength={30} placeholder="MH12 20110012345" className="uppercase placeholder:normal-case" invalid={Boolean(errors.license)} onChange={(e) => (setLicense(e.target.value), clear("license"))} />
       </Field>
 
-      <Field label="Email" required error={errors.email}>
+      <Field label="Email" hint="Optional" error={errors.email}>
         <Input value={email} type="email" autoComplete="email" placeholder="you@example.com" invalid={Boolean(errors.email)} onChange={(e) => (setEmail(e.target.value), clear("email"))} />
       </Field>
 

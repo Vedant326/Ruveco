@@ -10,10 +10,10 @@ function shortPlace(address: string) {
 }
 
 /**
- * One row of the owner's trip list: Date, Driver name, Vehicle company,
- * Vehicle type, Vehicle number and Status. Tapping it opens the trip.
+ * One row of a trip list: Date, Driver name (or, for the driver's own history, the company),
+ * Vehicle company, Vehicle type, Vehicle number and Status. Tapping it opens the trip.
  */
-export function TripCard({ trip, href }: { trip: Trip; href: string }) {
+export function TripCard({ trip, href, forDriver = false }: { trip: Trip; href: string; forDriver?: boolean }) {
   return (
     <Link
       href={href}
@@ -42,8 +42,8 @@ export function TripCard({ trip, href }: { trip: Trip; href: string }) {
           <dd className="font-semibold text-ink">{fmtDate(trip.date)}</dd>
         </div>
         <div className="min-w-0">
-          <dt className="text-muted">Driver</dt>
-          <dd className="truncate font-semibold text-ink">{trip.driverName}</dd>
+          <dt className="text-muted">{forDriver ? "Company" : "Driver"}</dt>
+          <dd className="truncate font-semibold text-ink">{forDriver ? trip.companyName : trip.driverName}</dd>
         </div>
         <div className="min-w-0">
           <dt className="text-muted">Vehicle company</dt>

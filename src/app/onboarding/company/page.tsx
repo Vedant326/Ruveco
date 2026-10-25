@@ -5,26 +5,36 @@ import { useState, type FormEvent } from "react";
 import { useAuth } from "@/components/auth-provider";
 import { TruckArt } from "@/components/brand/illustrations";
 import { Button } from "@/components/ui/button";
-import { Field, Input } from "@/components/ui/field";
+import { Field, Input, Textarea } from "@/components/ui/field";
 import { api, errorMessage } from "@/lib/api";
+import { PHONE_RE } from "@/lib/constants";
 
 export default function CompanySetupPage() {
   const { profile } = useAuth();
   // Owners from before company names were unique confirm the name they already entered.
   const confirming = Boolean(profile?.companyName);
+  const [ownerName, setOwnerName] = useState(profile?.displayName ?? "");
   const [name, setName] = useState(profile?.companyName ?? "");
-  const [error, setError] = useState<string | null>(null);
+  const [phone, setPhone] = useState(profile?.phone ?? "");
+  const [address, setAddress] = useState(profile?.address ?? "");
+  const [errors, setErrors] = useState<{ owner?: string; company?: string; phone?: string }>({});
+  const phoneFromLogin = Boolean(profile?.phone);
   const [busy, setBusy] = useState(false);
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
-    if (!name.trim()) return setError("Enter your company name");
+    const found: typeof errors = {};
+    if (!ownerName.trim()) found.owner = "Enter your name";
+    if (!name.trim()) found.company = "Enter your company name";
+    if (!PHONE_RE.test(phone)) found.phone = "Enter a valid 10-digit mobile number";
+    setErrors(found);
+    if (Object.keys(found).length) return;
     setBusy(true);
-    setError(null);
     try {
-      await api("/api/me/company", { body: { companyName: name.trim() } });
+      await api("/api/me/company", { body: { ownerName: ownerName.trim(), companyName: name.trim(), phone, address: address.trim() } });
     } catch (err) {
-      setError(errorMessage(err));
+      // Almost always about the company name (already registered).
+      setErrors({ company: errorMessage(err) });
       setBusy(false);
     }
   };
@@ -35,25 +45,58 @@ export default function CompanySetupPage() {
         <span className="grid h-14 w-14 place-items-center rounded-2xl bg-brand-50 text-brand-600">
           <Building2 className="h-7 w-7" />
         </span>
-        <h1 className="mt-4 text-2xl font-extrabold tracking-tight text-ink lg:text-3xl">{confirming ? "Confirm your company" : "Your company"}</h1>
+        <h1 className="mt-4 text-2xl font-extrabold tracking-tight text-ink lg:text-3xl">{confirming ? "Confirm your details" : "Your company"}</h1>
         <p className="mt-1.5 text-sm text-muted">
           {confirming
-            ? "Drivers now choose their company when they sign up, so each company name is registered once. Confirm your name to continue."
-            : "Drivers choose this name when they sign up, and only they are shown to you. Each name can be registered once."}
+            ? "Drivers now choose their company when they sign up, so each company name is registered once. Add your name and confirm your company to continue."
+            : "Drivers find you by your name and company name when they sign up, and only they are shown to you. Each company name can be registered once."}
         </p>
 
-        <Field label="Company name" required error={error} className="mt-6">
+        <Field label="Owner name" required error={errors.owner} className="mt-6">
           <Input
-            value={name}
-            autoFocus={!confirming}
-            maxLength={100}
-            placeholder="Shree Ganesh Transport"
-            invalid={Boolean(error)}
+            value={ownerName}
+            autoFocus={!ownerName}
+            maxLength={80}
+            placeholder="Ramesh Patil"
+            autoComplete="name"
+            invalid={Boolean(errors.owner)}
             onChange={(e) => {
-              setName(e.target.value);
-              setError(null);
+              setOwnerName(e.target.value);
+              setErrors((x) => ({ ...x, owner: undefined }));
             }}
           />
+        </Field>
+
+        <Field label="Company name" required error={errors.company} className="mt-5">
+          <Input
+            value={name}
+            maxLength={100}
+            placeholder="Shree Ganesh Transport"
+            invalid={Boolean(errors.company)}
+            onChange={(e) => {
+              setName(e.target.value);
+              setErrors((x) => ({ ...x, company: undefined }));
+            }}
+          />
+        </Field>
+
+        <Field label="Mobile number" required={!phoneFromLogin} hint={phoneFromLogin ? "From login" : undefined} error={errors.phone} className="mt-5">
+          <Input
+            value={phoneFromLogin ? `+91 ${phone}` : phone}
+            disabled={phoneFromLogin}
+            type="tel"
+            inputMode="numeric"
+            placeholder="10-digit mobile number"
+            invalid={Boolean(errors.phone)}
+            onChange={(e) => {
+              setPhone(e.target.value.replace(/\D/g, "").slice(0, 10));
+              setErrors((x) => ({ ...x, phone: undefined }));
+            }}
+          />
+        </Field>
+
+        <Field label="Address" hint="Optional" className="mt-5">
+          <Textarea value={address} maxLength={250} rows={2} placeholder="Office address, city, PIN" onChange={(e) => setAddress(e.target.value)} />
         </Field>
 
         <Button type="submit" block size="lg" className="mt-6" loading={busy}>

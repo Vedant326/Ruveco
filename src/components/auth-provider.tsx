@@ -30,7 +30,7 @@ export function useAuth() {
 export function homeFor(profile: UserProfile | null) {
   if (!profile?.role) return "/onboarding/role";
   // Accounts from before company names were unique confirm their company once.
-  if (profile.role === "owner") return profile.companyId ? "/owner" : "/onboarding/company";
+  if (profile.role === "owner") return profile.companyId && profile.displayName ? "/owner" : "/onboarding/company";
   if (!profile.profileComplete) return "/onboarding/driver";
   return profile.companyId ? "/driver" : "/onboarding/driver-company";
 }

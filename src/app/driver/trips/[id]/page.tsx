@@ -2,13 +2,15 @@
 
 import { CircleCheck, MapPinOff, Play, Radio, Square, WifiOff } from "lucide-react";
 import Link from "next/link";
-import { useParams, useRouter } from "next/navigation";
+import { useParams } from "next/navigation";
 import { useState } from "react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/app-shell";
 import { TruckArt } from "@/components/brand/illustrations";
 import { useDriverData } from "@/components/data-providers";
 import { DocumentsCard } from "@/components/trip/documents";
+import { FeedbackCard } from "@/components/trip/feedback-card";
+import { FuelCard } from "@/components/trip/fuel-card";
 import { GoodsCard } from "@/components/trip/goods-card";
 import { RouteCard } from "@/components/trip/route-card";
 import { TripMap } from "@/components/trip-map";
@@ -88,7 +90,6 @@ function StartTrip({ trip, blocked }: { trip: Trip; blocked: boolean }) {
 }
 
 function ActiveTrip({ trip }: { trip: Trip }) {
-  const router = useRouter();
   const { tracker } = useDriverData();
   const now = useNow(10_000);
   const [open, setOpen] = useState(false);
@@ -101,8 +102,9 @@ function ActiveTrip({ trip }: { trip: Trip }) {
       await Promise.race([tracker.flushNow(), new Promise((resolve) => setTimeout(resolve, 6000))]);
       await api(`/api/trips/${trip.id}/end`, { method: "POST" });
       clearTripQueue(trip.id);
+      // Stay here: the page turns into the completed trip, with fuel and feedback.
       toast.success(`Trip ${trip.tripCode} completed`);
-      router.push("/driver");
+      setOpen(false);
     } catch (err) {
       toast.error(errorMessage(err));
       setBusy(false);
@@ -141,6 +143,7 @@ function ActiveTrip({ trip }: { trip: Trip }) {
       </p>
 
       <RouteCard trip={trip} />
+      <FuelCard key={`${trip.totalFuel}|${trip.fuelCost}`} trip={trip} />
       <GoodsCard trip={trip} editable />
       <DocumentsCard trip={trip} canAdd />
 
@@ -189,7 +192,12 @@ export default function DriverTripPage() {
 
   return (
     <div className="space-y-4">
-      <PageHeader title={trip.tripCode} subtitle={trip.companyName} back="/driver" right={<StatusBadge status={trip.status} />} />
+      <PageHeader
+        title={trip.tripCode}
+        subtitle={trip.companyName}
+        back={trip.status === "completed" || trip.status === "cancelled" ? "/driver/history" : "/driver"}
+        right={<StatusBadge status={trip.status} />}
+      />
 
       {trip.status === "in_progress" ? (
         <ActiveTrip trip={trip} />
@@ -200,6 +208,8 @@ export default function DriverTripPage() {
               <CircleCheck className="h-5 w-5 shrink-0" /> Completed{trip.completedAt ? ` on ${fmtDateTime(trip.completedAt)}` : ""}
             </div>
           )}
+          {trip.status === "completed" && <FeedbackCard trip={trip} side="driver" />}
+          {trip.status === "completed" && <FuelCard key={`${trip.totalFuel}|${trip.fuelCost}`} trip={trip} />}
           {trip.status === "cancelled" && (
             <div className="rounded-3xl border border-rose-200 bg-rose-50 p-4 text-sm">
               <p className="font-bold text-rose-700">This trip was cancelled</p>

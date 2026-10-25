@@ -1,6 +1,6 @@
 "use client";
 
-import { Ban, Fuel, IndianRupee, Navigation, Phone, User } from "lucide-react";
+import { Ban, IndianRupee, Navigation, Phone, User } from "lucide-react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useState } from "react";
@@ -9,6 +9,7 @@ import { PageHeader } from "@/components/app-shell";
 import { TruckArt } from "@/components/brand/illustrations";
 import { useOwnerData } from "@/components/data-providers";
 import { DocumentsCard } from "@/components/trip/documents";
+import { FeedbackCard } from "@/components/trip/feedback-card";
 import { GoodsCard } from "@/components/trip/goods-card";
 import { LiveMap } from "@/components/trip/live-map";
 import { RouteCard } from "@/components/trip/route-card";
@@ -19,23 +20,22 @@ import { Card, Detail, EmptyState, ErrorState, SectionTitle, SkeletonList, Statu
 import { FadeIn } from "@/components/ui/motion";
 import { Sheet } from "@/components/ui/sheet";
 import { api, errorMessage } from "@/lib/api";
-import { cx, fmtDate, fmtDateTime, fmtPhone } from "@/lib/format";
+import { cx, fmtDate, fmtDateTime, fmtPhone, fmtRupees } from "@/lib/format";
 import type { Trip } from "@/lib/types";
 
-/** Total fuel and payment received: optional numbers the owner fills in. */
+/** Fuel filled and its cost (entered by the driver, read-only here) and the payment received (the owner's). */
 function FiguresCard({ trip }: { trip: Trip }) {
-  const [fuel, setFuel] = useState(trip.totalFuel?.toString() ?? "");
   const [payment, setPayment] = useState(trip.paymentReceived?.toString() ?? "");
   const [busy, setBusy] = useState(false);
 
-  const dirty = fuel !== (trip.totalFuel?.toString() ?? "") || payment !== (trip.paymentReceived?.toString() ?? "");
+  const dirty = payment !== (trip.paymentReceived?.toString() ?? "");
   const save = async () => {
     setBusy(true);
     try {
       await api(`/api/trips/${trip.id}/figures`, {
-        body: { totalFuel: fuel === "" ? null : Number(fuel), paymentReceived: payment === "" ? null : Number(payment) },
+        body: { paymentReceived: payment === "" ? null : Number(payment) },
       });
-      toast.success("Trip figures saved");
+      toast.success("Payment saved");
     } catch (err) {
       toast.error(errorMessage(err));
     } finally {
@@ -47,13 +47,14 @@ function FiguresCard({ trip }: { trip: Trip }) {
   return (
     <Card>
       <SectionTitle>Trip figures</SectionTitle>
-      <div className="grid grid-cols-2 gap-3">
-        <Field label="Total fuel" hint="litres">
-          <span className="relative block">
-            <Fuel className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-brand-500" />
-            <Input value={fuel} inputMode="decimal" placeholder="Optional" className="pl-11" onChange={(e) => setFuel(numeric(e.target.value))} />
-          </span>
-        </Field>
+      <dl className="grid grid-cols-2 gap-3 rounded-2xl bg-brand-50/60 p-3">
+        <Detail label="Fuel filled">{trip.totalFuel != null ? `${trip.totalFuel} litres` : "–"}</Detail>
+        <Detail label="Fuel cost">{trip.fuelCost != null ? fmtRupees(trip.fuelCost) : "–"}</Detail>
+        <p className="col-span-2 text-xs text-muted">
+          {trip.totalFuel == null && trip.fuelCost == null ? "The driver enters fuel during or after the trip." : "Entered by the driver."}
+        </p>
+      </dl>
+      <div className="mt-4">
         <Field label="Payment received" hint="₹">
           <span className="relative block">
             <IndianRupee className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-brand-500" />
@@ -63,7 +64,7 @@ function FiguresCard({ trip }: { trip: Trip }) {
       </div>
       {dirty && (
         <Button size="sm" className="mt-3" loading={busy} onClick={save}>
-          Save figures
+          Save payment
         </Button>
       )}
     </Card>
@@ -167,6 +168,8 @@ export default function OwnerTripPage() {
         </FadeIn>
       )}
 
+      {trip.status === "completed" && <FeedbackCard trip={trip} side="owner" />}
+
       {trip.status !== "cancelled" && <LiveMap trip={trip} className="h-64 sm:h-80" />}
 
       <RouteCard trip={trip} />
@@ -212,7 +215,7 @@ export default function OwnerTripPage() {
 
       <GoodsCard trip={trip} editable={open} />
       <DocumentsCard trip={trip} canAdd />
-      <FiguresCard key={`${trip.totalFuel}|${trip.paymentReceived}`} trip={trip} />
+      <FiguresCard key={String(trip.paymentReceived)} trip={trip} />
 
       {(trip.startedAt || trip.completedAt) && (
         <Card>

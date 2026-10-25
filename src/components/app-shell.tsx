@@ -1,7 +1,7 @@
 "use client";
 
 import { doc, updateDoc } from "firebase/firestore";
-import { ArrowLeft, Bell, BellRing, LogOut, type LucideIcon } from "lucide-react";
+import { ArrowLeft, Bell, BellRing, Building2, LogOut, type LucideIcon } from "lucide-react";
 import { motion } from "motion/react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
@@ -69,7 +69,9 @@ export function AppShell({ nav, tripHref, children }: { nav: NavItem[]; tripHref
     router.push(tripHref(n.tripId));
   };
 
-  const name = profile?.role === "owner" ? profile.companyName : profile?.displayName;
+  const isOwner = profile?.role === "owner";
+  // Owners: their own name, with the company below it. Older owner accounts may have no name yet.
+  const name = isOwner ? profile?.displayName || profile?.companyName : profile?.displayName;
   const initial = (name ?? "R").trim().charAt(0).toUpperCase();
 
   return (
@@ -198,6 +200,13 @@ export function AppShell({ nav, tripHref, children }: { nav: NavItem[]; tripHref
           <span className="grid h-12 w-12 shrink-0 place-items-center rounded-full bg-brand-700 text-lg font-bold text-white">{initial}</span>
           <div className="min-w-0">
             <p className="truncate font-bold text-ink">{name}</p>
+            {isOwner && profile?.displayName && (
+              <p className="flex min-w-0 items-center gap-1 text-sm font-semibold text-brand-700">
+                <Building2 className="h-3.5 w-3.5 shrink-0" />
+                <span className="truncate">{profile.companyName}</span>
+              </p>
+            )}
+            {isOwner && profile?.address && <p className="line-clamp-2 text-sm text-muted">{profile.address}</p>}
             <p className="truncate text-sm text-muted">{fmtPhone(profile?.phone) || profile?.email}</p>
             <p className="mt-0.5 text-xs font-semibold uppercase tracking-wide text-brand-600">{profile?.role}</p>
           </div>

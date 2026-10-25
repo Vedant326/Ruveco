@@ -53,7 +53,7 @@ export default function DriverProfileViewPage() {
           <Card>
             <dl className="grid gap-4 sm:grid-cols-2">
               <Detail label="Driving license number">{driver.licenseNumber}</Detail>
-              <Detail label="Email">{driver.email}</Detail>
+              <Detail label="Email">{driver.email || "Not added"}</Detail>
               <Detail label="Company" className="sm:col-span-2">
                 {driver.companyName}
               </Detail>

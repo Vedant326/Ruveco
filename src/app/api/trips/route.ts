@@ -79,6 +79,7 @@ export const POST = handle(async (req) => {
     distanceKm: Math.round(route.distanceKm * 10) / 10,
     durationMin: Math.round(route.durationSec / 60),
     totalFuel: null,
+    fuelCost: null,
     paymentReceived: null,
     startedAt: null,
     completedAt: null,

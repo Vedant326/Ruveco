@@ -14,7 +14,7 @@ import {
   syncTripAccess,
   type NotificationInput,
 } from "@/lib/server/trips";
-import type { Trip, TripDocument } from "@/lib/types";
+import type { Trip, TripDocument, TripFeedback } from "@/lib/types";
 
 type Ctx = { params: Promise<{ id: string; action: string }> };
 
@@ -34,9 +34,15 @@ const goodsSchema = z.object({
     .max(50, "A trip can have up to 50 goods items"),
 });
 
+// Payment received: the owner's figure.
 const figuresSchema = z.object({
-  totalFuel: z.number().min(0).max(100_000).nullable(),
   paymentReceived: z.number().min(0).max(100_000_000).nullable(),
+});
+
+// Fuel filled (litres) and what it cost (₹): the driver's figures, shown to the owner.
+const fuelSchema = z.object({
+  totalFuel: z.number().min(0).max(100_000).nullable(),
+  fuelCost: z.number().min(0).max(10_000_000).nullable(),
 });
 
 const documentSchema = z.object({
@@ -44,6 +50,11 @@ const documentSchema = z.object({
   name: z.string().trim().max(60).default(""),
   fileName: z.string().trim().min(1).max(200),
   path: z.string().min(1),
+});
+
+const feedbackSchema = z.object({
+  rating: z.number().int().min(1, "Choose a rating").max(5),
+  comment: z.string().trim().max(500, "Feedback is too long").default(""),
 });
 
 /** Status only ever changes here, never from a form. */
@@ -70,11 +81,20 @@ export const POST = handle(async (req: NextRequest, ctx: Ctx) => {
     case "goods":
       return saveGoods(trip, goodsSchema.parse(await req.json()).goods);
     case "figures":
-      if (!isOwner) throw new ApiError(403, "Only the owner can edit trip figures.");
+      if (!isOwner) throw new ApiError(403, "Only the owner can edit the payment received.");
       await adminDb().doc(`trips/${id}`).update(figuresSchema.parse(await req.json()));
+      return;
+    case "fuel":
+      if (!isDriver) throw new ApiError(403, "Only the assigned driver can enter fuel.");
+      if (trip.status !== "in_progress" && trip.status !== "completed") {
+        throw new ApiError(409, "Fuel can be entered once the trip has started.");
+      }
+      await adminDb().doc(`trips/${id}`).update(fuelSchema.parse(await req.json()));
       return;
     case "document":
       return addDocument(trip, session, documentSchema.parse(await req.json()));
+    case "feedback":
+      return addFeedback(trip, session, isOwner ? "owner" : "driver", feedbackSchema.parse(await req.json()));
     default:
       throw new ApiError(404, "Unknown action.");
   }
@@ -207,4 +227,35 @@ async function addDocument(trip: Trip, session: Session, input: z.infer<typeof d
     .doc(`trips/${trip.id}`)
     .update({ documents: FieldValue.arrayUnion(document) });
   return { document };
+}
+
+/** Rating and comment after a completed trip. Each side gives it once, and the other side is told. */
+async function addFeedback(trip: Trip, session: Session, side: "owner" | "driver", input: z.infer<typeof feedbackSchema>) {
+  if (trip.status !== "completed") throw new ApiError(409, "Feedback can be given after the trip is completed.");
+
+  const db = adminDb();
+  const ref = db.doc(`trips/${trip.id}`);
+  const profile = await loadProfile(session.uid);
+  const feedback: TripFeedback = {
+    rating: input.rating,
+    comment: input.comment,
+    byName: side === "owner" ? profile?.displayName || trip.companyName || "Owner" : profile?.displayName || trip.driverName,
+    at: Date.now(),
+  };
+  const note: NotificationInput = {
+    userId: side === "owner" ? trip.driverId : trip.ownerId,
+    tripId: trip.id,
+    tripCode: trip.tripCode,
+    title: "New trip feedback",
+    message: `${feedback.byName} rated trip ${trip.tripCode} ${feedback.rating} out of 5.`,
+  };
+
+  await db.runTransaction(async (tx) => {
+    const fresh = await tx.get(ref);
+    if (fresh.get(`feedback.${side}`)) throw new ApiError(409, "You already gave feedback for this trip.");
+    tx.update(ref, { [`feedback.${side}`]: feedback });
+    addNotification(tx, note);
+  });
+  await sendPush([note]);
+  return { feedback };
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, House, ListChecks, LogOut, Plus, Truck, User } from "lucide-react";
+import { Check, History, House, ListChecks, LogOut, Plus, Truck, User } from "lucide-react";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 import { AppShell, type NavItem } from "./app-shell";
@@ -20,6 +20,7 @@ const OWNER_NAV: NavItem[] = [
 
 const DRIVER_NAV: NavItem[] = [
   { href: "/driver", label: "Trips", icon: ListChecks, exact: true },
+  { href: "/driver/history", label: "History", icon: History },
   { href: "/driver/profile", label: "Profile", icon: User },
 ];
 

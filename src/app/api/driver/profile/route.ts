@@ -9,7 +9,8 @@ const schema = z.object({
   phone: z.string().regex(PHONE_RE, "Enter a valid 10-digit mobile number").optional(),
   address: z.string().trim().min(1, "Enter your address").max(250),
   licenseNumber: z.string().trim().min(4, "Enter your driving license number").max(30),
-  email: z.email("Enter a valid email address"),
+  // Optional: an empty box sends "".
+  email: z.union([z.literal(""), z.email("Enter a valid email address")]).default(""),
   companyId: z.string().min(1, "Choose your company"),
   licensePhotoPath: z.string().min(1, "Upload your license photo"),
   facePhotoPath: z.string().min(1, "Take a face photo"),

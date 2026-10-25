@@ -20,6 +20,8 @@ export interface UserProfile {
   companyName: string | null;
   /** Key of the `companies` document. Missing on accounts from before company names were unique. */
   companyId?: string | null;
+  /** Owners only, optional. */
+  address?: string | null;
   profileComplete: boolean;
   createdAt: number;
 }
@@ -94,13 +96,27 @@ export interface Trip {
   cancelReason: string | null;
   distanceKm: number;
   durationMin: number;
+  /** Fuel filled in litres, entered by the driver. */
   totalFuel: number | null;
+  /** What the fuel cost in ₹, entered by the driver. Missing on trips from before it existed. */
+  fuelCost?: number | null;
+  /** Entered by the owner. */
   paymentReceived: number | null;
   startedAt: number | null;
   completedAt: number | null;
   cancelledAt: number | null;
   trackingToken: string | null;
+  /** Given after the trip is completed, once by each side. Each side sees the other's. */
+  feedback?: { owner?: TripFeedback; driver?: TripFeedback };
   createdAt: number;
+}
+
+export interface TripFeedback {
+  /** 1 to 5 stars. */
+  rating: number;
+  comment: string;
+  byName: string;
+  at: number;
 }
 
 export interface AppNotification {

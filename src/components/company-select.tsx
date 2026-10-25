@@ -11,8 +11,9 @@ export function CompanySelect({ value, onChange, invalid }: { value: Option | nu
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    api<{ companies: { id: string; name: string }[] }>("/api/companies")
-      .then((res) => setOptions(res.companies.map((c) => ({ value: c.id, label: c.name }))))
+    api<{ companies: { id: string; name: string; ownerName: string }[] }>("/api/companies")
+      // "Owner name - Company name", so drivers can tell similar companies apart.
+      .then((res) => setOptions(res.companies.map((c) => ({ value: c.id, label: c.ownerName ? `${c.ownerName} - ${c.name}` : c.name }))))
       .catch(() => setOptions([]))
       .finally(() => setLoading(false));
   }, []);
