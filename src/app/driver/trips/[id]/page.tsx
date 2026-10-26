@@ -22,6 +22,7 @@ import { Sheet } from "@/components/ui/sheet";
 import { api, errorMessage } from "@/lib/api";
 import { cx, fmtDateTime, fmtTime } from "@/lib/format";
 import { useNow } from "@/lib/hooks";
+import { useLiveTrip } from "@/lib/live";
 import { clearTripQueue, requestLocationPermission } from "@/lib/tracker";
 import type { Trip } from "@/lib/types";
 
@@ -92,6 +93,8 @@ function StartTrip({ trip, blocked }: { trip: Trip; blocked: boolean }) {
 
 function ActiveTrip({ trip }: { trip: Trip }) {
   const { tracker } = useDriverData();
+  // Planned route (dashed) and path driven so far, like the owner's map and the shared link.
+  const live = useLiveTrip(trip.id);
   const now = useNow(10_000);
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -117,7 +120,14 @@ function ActiveTrip({ trip }: { trip: Trip }) {
   return (
     <>
       <div className="relative h-72 overflow-hidden rounded-3xl border border-line/70 shadow-card sm:h-96">
-        <TripMap source={trip.source} destination={trip.destination} vehicle={tracker.position} className="absolute inset-0" />
+        <TripMap
+          source={trip.source}
+          destination={trip.destination}
+          vehicle={tracker.position ?? live.latest}
+          route={live.route}
+          path={live.path}
+          className="absolute inset-0"
+        />
       </div>
 
       <Card className={cx("flex items-center gap-3", tracker.error && "border-amber-300 bg-amber-50")}>
