@@ -1,6 +1,6 @@
 "use client";
 
-import { Ban, IndianRupee, Navigation, Phone, User } from "lucide-react";
+import { Ban, Navigation, Phone, User } from "lucide-react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useState } from "react";
@@ -10,66 +10,19 @@ import { TruckArt } from "@/components/brand/illustrations";
 import { useOwnerData } from "@/components/data-providers";
 import { DocumentsCard } from "@/components/trip/documents";
 import { FeedbackCard } from "@/components/trip/feedback-card";
+import { FuelCard } from "@/components/trip/fuel-card";
 import { GoodsCard } from "@/components/trip/goods-card";
 import { LiveMap } from "@/components/trip/live-map";
 import { RouteCard } from "@/components/trip/route-card";
 import { Button } from "@/components/ui/button";
 import { buttonClass } from "@/components/ui/button-class";
-import { Field, Input, Textarea } from "@/components/ui/field";
+import { Field, Textarea } from "@/components/ui/field";
 import { Card, Detail, EmptyState, ErrorState, SectionTitle, SkeletonList, StatusBadge } from "@/components/ui/misc";
 import { FadeIn } from "@/components/ui/motion";
 import { Sheet } from "@/components/ui/sheet";
 import { api, errorMessage } from "@/lib/api";
-import { cx, fmtDate, fmtDateTime, fmtPhone, fmtRupees } from "@/lib/format";
+import { cx, fmtDate, fmtDateTime, fmtPhone } from "@/lib/format";
 import type { Trip } from "@/lib/types";
-
-/** Fuel filled and its cost (entered by the driver, read-only here) and the payment received (the owner's). */
-function FiguresCard({ trip }: { trip: Trip }) {
-  const [payment, setPayment] = useState(trip.paymentReceived?.toString() ?? "");
-  const [busy, setBusy] = useState(false);
-
-  const dirty = payment !== (trip.paymentReceived?.toString() ?? "");
-  const save = async () => {
-    setBusy(true);
-    try {
-      await api(`/api/trips/${trip.id}/figures`, {
-        body: { paymentReceived: payment === "" ? null : Number(payment) },
-      });
-      toast.success("Payment saved");
-    } catch (err) {
-      toast.error(errorMessage(err));
-    } finally {
-      setBusy(false);
-    }
-  };
-  const numeric = (value: string) => value.replace(/[^\d.]/g, "").replace(/(\..*)\./g, "$1");
-
-  return (
-    <Card>
-      <SectionTitle>Trip figures</SectionTitle>
-      <dl className="grid grid-cols-2 gap-3 rounded-2xl bg-brand-50/60 p-3">
-        <Detail label="Fuel filled">{trip.totalFuel != null ? `${trip.totalFuel} litres` : "–"}</Detail>
-        <Detail label="Fuel cost">{trip.fuelCost != null ? fmtRupees(trip.fuelCost) : "–"}</Detail>
-        <p className="col-span-2 text-xs text-muted">
-          {trip.totalFuel == null && trip.fuelCost == null ? "The driver enters fuel during or after the trip." : "Entered by the driver."}
-        </p>
-      </dl>
-      <div className="mt-4">
-        <Field label="Payment received" hint="₹">
-          <span className="relative block">
-            <IndianRupee className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-brand-500" />
-            <Input value={payment} inputMode="decimal" placeholder="Optional" className="pl-11" onChange={(e) => setPayment(numeric(e.target.value))} />
-          </span>
-        </Field>
-      </div>
-      {dirty && (
-        <Button size="sm" className="mt-3" loading={busy} onClick={save}>
-          Save payment
-        </Button>
-      )}
-    </Card>
-  );
-}
 
 function CancelTrip({ trip }: { trip: Trip }) {
   const [open, setOpen] = useState(false);
@@ -215,7 +168,7 @@ export default function OwnerTripPage() {
 
       <GoodsCard trip={trip} editable={open} />
       <DocumentsCard trip={trip} canAdd />
-      <FiguresCard key={String(trip.paymentReceived)} trip={trip} />
+      <FuelCard trip={trip} canEdit={false} />
 
       {(trip.startedAt || trip.completedAt) && (
         <Card>

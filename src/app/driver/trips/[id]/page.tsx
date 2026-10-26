@@ -13,6 +13,7 @@ import { FeedbackCard } from "@/components/trip/feedback-card";
 import { FuelCard } from "@/components/trip/fuel-card";
 import { GoodsCard } from "@/components/trip/goods-card";
 import { RouteCard } from "@/components/trip/route-card";
+import { VehicleDocumentsCard } from "@/components/trip/vehicle-documents";
 import { TripMap } from "@/components/trip-map";
 import { Button } from "@/components/ui/button";
 import { buttonClass } from "@/components/ui/button-class";
@@ -143,7 +144,8 @@ function ActiveTrip({ trip }: { trip: Trip }) {
       </p>
 
       <RouteCard trip={trip} />
-      <FuelCard key={`${trip.totalFuel}|${trip.fuelCost}`} trip={trip} />
+      <VehicleDocumentsCard trip={trip} />
+      <FuelCard trip={trip} canEdit />
       <GoodsCard trip={trip} editable />
       <DocumentsCard trip={trip} canAdd />
 
@@ -209,7 +211,7 @@ export default function DriverTripPage() {
             </div>
           )}
           {trip.status === "completed" && <FeedbackCard trip={trip} side="driver" />}
-          {trip.status === "completed" && <FuelCard key={`${trip.totalFuel}|${trip.fuelCost}`} trip={trip} />}
+          {trip.status === "completed" && <FuelCard trip={trip} canEdit />}
           {trip.status === "cancelled" && (
             <div className="rounded-3xl border border-rose-200 bg-rose-50 p-4 text-sm">
               <p className="font-bold text-rose-700">This trip was cancelled</p>
@@ -232,6 +234,7 @@ export default function DriverTripPage() {
             </div>
           </Card>
 
+          {trip.status === "scheduled" && <VehicleDocumentsCard trip={trip} />}
           <GoodsCard trip={trip} editable={trip.status === "scheduled"} />
           <DocumentsCard trip={trip} canAdd />
 

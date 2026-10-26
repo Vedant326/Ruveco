@@ -96,9 +96,11 @@ export interface Trip {
   cancelReason: string | null;
   distanceKm: number;
   durationMin: number;
-  /** Fuel filled in litres, entered by the driver. */
+  /** Each time the driver filled fuel. Missing on trips from before entries existed. */
+  fuelEntries?: FuelEntry[];
+  /** Total litres of all fuel entries (kept by the server). */
   totalFuel: number | null;
-  /** What the fuel cost in ₹, entered by the driver. Missing on trips from before it existed. */
+  /** Total ₹ of all fuel entries (kept by the server). */
   fuelCost?: number | null;
   /** Entered by the owner. */
   paymentReceived: number | null;
@@ -109,6 +111,19 @@ export interface Trip {
   /** Given after the trip is completed, once by each side. Each side sees the other's. */
   feedback?: { owner?: TripFeedback; driver?: TripFeedback };
   createdAt: number;
+}
+
+export interface FuelEntry {
+  id: string;
+  litres: number;
+  /** ₹ */
+  cost: number;
+  /** Photo or PDF of the fuel bill. Null only for the single total of an older trip. */
+  billPath: string | null;
+  billFileName: string | null;
+  /** Where the driver was when adding it, if the phone could tell. */
+  location: { lat: number; lng: number; accuracy: number | null } | null;
+  at: number;
 }
 
 export interface TripFeedback {

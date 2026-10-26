@@ -10,7 +10,7 @@ import { TruckArt } from "@/components/brand/illustrations";
 import { useOwnerData } from "@/components/data-providers";
 import { Button } from "@/components/ui/button";
 import { Field, Input } from "@/components/ui/field";
-import { Card, EmptyState, ErrorState, SectionTitle, SkeletonList } from "@/components/ui/misc";
+import { Card, EmptyState, ErrorState, SectionTitle, SkeletonList, Spinner } from "@/components/ui/misc";
 import { Stagger, StaggerItem } from "@/components/ui/motion";
 import { SearchSelect, type Option } from "@/components/ui/search-select";
 import { Sheet } from "@/components/ui/sheet";
@@ -21,7 +21,7 @@ import fallbackCompanies from "@/lib/data/vehicle-companies.json";
 import { fb } from "@/lib/firebase/client";
 import { cx, fmtDateTime } from "@/lib/format";
 import type { Vehicle, VehicleDocType, VehicleType } from "@/lib/types";
-import { openFile, safeFileName, uploadFile } from "@/lib/uploads";
+import { openFile, safeFileName, saveWithRetry, uploadFile } from "@/lib/uploads";
 
 type PendingVehicleDocument = PendingDocument<VehicleDocType>;
 
@@ -29,9 +29,11 @@ type PendingVehicleDocument = PendingDocument<VehicleDocType>;
 async function uploadVehicleDocument(uid: string, vehicleId: string, pending: PendingVehicleDocument) {
   const path = `vehicles/${uid}/${vehicleId}/${crypto.randomUUID()}-${safeFileName(pending.file.name)}`;
   await uploadFile(path, pending.file);
-  await api(`/api/vehicles/${vehicleId}/document`, {
-    body: { type: pending.type, name: pending.name, fileName: pending.file.name, path },
-  });
+  await saveWithRetry(() =>
+    api(`/api/vehicles/${vehicleId}/document`, {
+      body: { type: pending.type, name: pending.name, fileName: pending.file.name, path },
+    }),
+  );
 }
 
 /** Label for a document chosen but not uploaded yet. */
@@ -67,6 +69,9 @@ export default function VehiclesPage() {
   // By ID, so the sheet shows new documents as soon as they are saved.
   const [openId, setOpenId] = useState<string | null>(null);
   const openVehicle = vehicles.items.find((v) => v.id === openId) ?? null;
+  // Documents still uploading from registration, per vehicle, so cards say so instead of "No documents".
+  const [uploading, setUploading] = useState<Record<string, number>>({});
+  const changeUploading = (id: string, by: number) => setUploading((u) => ({ ...u, [id]: Math.max(0, (u[id] ?? 0) + by) }));
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
@@ -90,7 +95,9 @@ export default function VehiclesPage() {
       const pending = documents;
       setDocuments([]);
       if (pending.length) {
-        void Promise.allSettled(pending.map((doc) => uploadVehicleDocument(user!.uid, created.id, doc))).then((results) => {
+        changeUploading(created.id, pending.length);
+        const uploads = pending.map((doc) => uploadVehicleDocument(user!.uid, created.id, doc).finally(() => changeUploading(created.id, -1)));
+        void Promise.allSettled(uploads).then((results) => {
           const failed = results.filter((r) => r.status === "rejected").length;
           if (failed) toast.warning(`${failed} document${failed > 1 ? "s" : ""} for ${number} could not be uploaded. Tap the vehicle to add ${failed > 1 ? "them" : "it"} again.`);
           else toast.success(`Documents for ${number} uploaded`);
@@ -234,7 +241,15 @@ export default function VehiclesPage() {
                     <p className="truncate text-[15px] font-bold tracking-wide text-ink">{v.number}</p>
                     <p className="truncate text-sm text-muted">{v.company}</p>
                     <p className="mt-0.5 flex items-center gap-1 text-xs font-medium text-brand-600">
-                      <FileText className="h-3.5 w-3.5" /> {documentCount(v)}
+                      {uploading[v.id] ? (
+                        <>
+                          <Spinner className="h-3.5 w-3.5" /> Uploading…
+                        </>
+                      ) : (
+                        <>
+                          <FileText className="h-3.5 w-3.5" /> {documentCount(v)}
+                        </>
+                      )}
                     </p>
                   </div>
                   <span className="ml-auto rounded-full bg-brand-100 px-2.5 py-1 text-xs font-bold text-brand-700">{v.type}</span>
@@ -253,7 +268,7 @@ export default function VehiclesPage() {
         onClose={() => setDocOpen(false)}
         onAdd={(doc) => setDocuments((list) => [...list, doc])}
       />
-      <VehicleDocumentsSheet vehicle={openVehicle} onClose={() => setOpenId(null)} />
+      <VehicleDocumentsSheet vehicle={openVehicle} uploading={openId ? (uploading[openId] ?? 0) : 0} onClose={() => setOpenId(null)} />
     </>
   );
 }
@@ -264,7 +279,7 @@ function documentCount(v: Vehicle) {
 }
 
 /** A registered vehicle's documents: view each one, and add more. */
-function VehicleDocumentsSheet({ vehicle, onClose }: { vehicle: Vehicle | null; onClose: () => void }) {
+function VehicleDocumentsSheet({ vehicle, uploading, onClose }: { vehicle: Vehicle | null; uploading: number; onClose: () => void }) {
   const [adding, setAdding] = useState(false);
   const documents = [...(vehicle?.documents ?? [])].sort((a, b) => b.uploadedAt - a.uploadedAt);
 
@@ -288,7 +303,12 @@ function VehicleDocumentsSheet({ vehicle, onClose }: { vehicle: Vehicle | null; 
         >
           Documents
         </SectionTitle>
-        {documents.length === 0 ? (
+        {uploading > 0 && (
+          <p className="mb-2 flex items-center gap-2 rounded-2xl bg-brand-50 p-3 text-sm font-medium text-brand-700">
+            <Spinner className="h-4 w-4" /> Uploading…
+          </p>
+        )}
+        {documents.length === 0 && uploading === 0 ? (
           <p className="flex items-center gap-2 py-2 text-sm text-muted">
             <FileText className="h-4 w-4" /> No documents uploaded yet
           </p>

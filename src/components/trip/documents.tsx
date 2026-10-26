@@ -11,7 +11,7 @@ import { api, errorMessage } from "@/lib/api";
 import { DOC_TYPES } from "@/lib/constants";
 import { fmtDateTime } from "@/lib/format";
 import type { DocType, Trip } from "@/lib/types";
-import { openFile, safeFileName, uploadFile, validateFile } from "@/lib/uploads";
+import { openFile, safeFileName, saveWithRetry, uploadFile, validateFile } from "@/lib/uploads";
 
 export interface PendingDocument<T extends string = DocType> {
   type: T;
@@ -23,9 +23,11 @@ export interface PendingDocument<T extends string = DocType> {
 export async function uploadTripDocument(tripId: string, pending: PendingDocument) {
   const path = `trips/${tripId}/${crypto.randomUUID()}-${safeFileName(pending.file.name)}`;
   await uploadFile(path, pending.file);
-  await api(`/api/trips/${tripId}/document`, {
-    body: { type: pending.type, name: pending.name, fileName: pending.file.name, path },
-  });
+  await saveWithRetry(() =>
+    api(`/api/trips/${tripId}/document`, {
+      body: { type: pending.type, name: pending.name, fileName: pending.file.name, path },
+    }),
+  );
 }
 
 /** Add document dialog: type (for a trip E-way bill, GST bill or Other), then the file. */

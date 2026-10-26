@@ -14,7 +14,7 @@ import {
   syncTripAccess,
   type NotificationInput,
 } from "@/lib/server/trips";
-import type { Trip, TripDocument, TripFeedback } from "@/lib/types";
+import type { FuelEntry, Trip, TripDocument, TripFeedback } from "@/lib/types";
 
 type Ctx = { params: Promise<{ id: string; action: string }> };
 
@@ -39,11 +39,19 @@ const figuresSchema = z.object({
   paymentReceived: z.number().min(0).max(100_000_000).nullable(),
 });
 
-// Fuel filled (litres) and what it cost (₹): the driver's figures, shown to the owner.
+// One fuel fill by the driver: litres, cost, the bill, and where it happened. Shown to the owner.
 const fuelSchema = z.object({
-  totalFuel: z.number().min(0).max(100_000).nullable(),
-  fuelCost: z.number().min(0).max(10_000_000).nullable(),
+  litres: z.number().positive("Enter the litres filled").max(5_000, "Litres look too high"),
+  cost: z.number().positive("Enter the fuel cost").max(1_000_000, "Cost looks too high"),
+  billPath: z.string().min(1, "Add a photo of the fuel bill"),
+  billFileName: z.string().trim().min(1).max(200),
+  location: z
+    .object({ lat: z.number().min(-90).max(90), lng: z.number().min(-180).max(180), accuracy: z.number().min(0).nullable().default(null) })
+    .nullable()
+    .default(null),
 });
+
+const fuelRemoveSchema = z.object({ entryId: z.string().min(1) });
 
 const documentSchema = z.object({
   type: z.enum(["eway", "gst", "other"]),
@@ -85,12 +93,11 @@ export const POST = handle(async (req: NextRequest, ctx: Ctx) => {
       await adminDb().doc(`trips/${id}`).update(figuresSchema.parse(await req.json()));
       return;
     case "fuel":
-      if (!isDriver) throw new ApiError(403, "Only the assigned driver can enter fuel.");
-      if (trip.status !== "in_progress" && trip.status !== "completed") {
-        throw new ApiError(409, "Fuel can be entered once the trip has started.");
-      }
-      await adminDb().doc(`trips/${id}`).update(fuelSchema.parse(await req.json()));
-      return;
+      if (!isDriver) throw new ApiError(403, "Only the assigned driver can add fuel.");
+      return addFuel(trip, fuelSchema.parse(await req.json()));
+    case "fuel-remove":
+      if (!isDriver) throw new ApiError(403, "Only the assigned driver can remove fuel.");
+      return removeFuel(trip, fuelRemoveSchema.parse(await req.json()).entryId);
     case "document":
       return addDocument(trip, session, documentSchema.parse(await req.json()));
     case "feedback":
@@ -198,7 +205,10 @@ async function saveGoods(trip: Trip, goods: z.infer<typeof goodsSchema>["goods"]
     .update({ goods: goods.map((g) => ({ id: randomUUID(), ...g })) });
 }
 
+/** Safe to call again for the same file (the apps retry it), so a file is never listed twice. */
 async function addDocument(trip: Trip, session: Session, input: z.infer<typeof documentSchema>) {
+  const already = trip.documents.find((d) => d.path === input.path);
+  if (already) return { document: already };
   if (input.type === "other" && !input.name) throw new ApiError(400, "Enter a name for this document");
   if (!input.path.startsWith(`trips/${trip.id}/`)) throw new ApiError(400, "Invalid file. Please upload it again.");
   if (trip.documents.length >= 30) throw new ApiError(409, "A trip can have up to 30 documents.");
@@ -258,4 +268,64 @@ async function addFeedback(trip: Trip, session: Session, side: "owner" | "driver
   });
   await sendPush([note]);
   return { feedback };
+}
+
+/** The trip's fuel entries. A trip from before entries existed keeps its single total as one entry. */
+function fuelEntriesOf(snap: FirebaseFirestore.DocumentSnapshot): FuelEntry[] {
+  const entries = snap.get("fuelEntries") as FuelEntry[] | undefined;
+  if (entries) return entries;
+  const litres = snap.get("totalFuel") as number | null | undefined;
+  const cost = snap.get("fuelCost") as number | null | undefined;
+  if (litres == null && cost == null) return [];
+  const at = (snap.get("startedAt") as number | null) ?? (snap.get("createdAt") as number);
+  return [{ id: "earlier", litres: litres ?? 0, cost: cost ?? 0, billPath: null, billFileName: null, location: null, at }];
+}
+
+/** Totals kept on the trip, so lists and old screens show them without adding up entries. */
+function fuelTotals(entries: FuelEntry[]) {
+  if (!entries.length) return { totalFuel: null, fuelCost: null };
+  const round = (n: number) => Math.round(n * 100) / 100;
+  return {
+    totalFuel: round(entries.reduce((sum, e) => sum + e.litres, 0)),
+    fuelCost: round(entries.reduce((sum, e) => sum + e.cost, 0)),
+  };
+}
+
+/** One fuel fill with its bill. Safe to call again for the same bill (the apps retry it). */
+async function addFuel(trip: Trip, input: z.infer<typeof fuelSchema>) {
+  if (trip.status !== "in_progress" && trip.status !== "completed") {
+    throw new ApiError(409, "Fuel can be added once the trip has started.");
+  }
+  if (!input.billPath.startsWith(`trips/${trip.id}/`)) throw new ApiError(400, "Invalid bill file. Please add it again.");
+  const file = adminBucket().file(input.billPath);
+  const [exists] = await file.exists();
+  if (!exists) throw new ApiError(400, "Bill upload did not finish. Please try again.");
+  const [meta] = await file.getMetadata();
+  if (!ALLOWED_FILE_TYPES.includes(meta.contentType ?? "")) throw new ApiError(400, "Only PDF, JPG or PNG files are allowed.");
+
+  const db = adminDb();
+  const ref = db.doc(`trips/${trip.id}`);
+  return db.runTransaction(async (tx) => {
+    const entries = fuelEntriesOf(await tx.get(ref));
+    const already = entries.find((e) => e.billPath === input.billPath);
+    if (already) return { entry: already };
+    if (entries.length >= 50) throw new ApiError(409, "A trip can have up to 50 fuel entries.");
+
+    const entry: FuelEntry = { id: randomUUID(), ...input, at: Date.now() };
+    const next = [...entries, entry];
+    tx.update(ref, { fuelEntries: next, ...fuelTotals(next) });
+    return { entry };
+  });
+}
+
+/** Removes a wrong fuel entry. Its bill file stays in storage. */
+async function removeFuel(trip: Trip, entryId: string) {
+  const db = adminDb();
+  const ref = db.doc(`trips/${trip.id}`);
+  await db.runTransaction(async (tx) => {
+    const entries = fuelEntriesOf(await tx.get(ref));
+    const next = entries.filter((e) => e.id !== entryId);
+    if (next.length === entries.length) return;
+    tx.update(ref, { fuelEntries: next, ...fuelTotals(next) });
+  });
 }
