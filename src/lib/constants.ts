@@ -21,7 +21,10 @@ export const VEHICLE_DOC_TYPES: { value: VehicleDocType; label: string }[] = [
   { value: "other", label: "Other" },
 ];
 
+/** Units of goods items saved before weights existed. */
 export const GOODS_UNITS = ["kg", "ton", "pieces", "boxes"] as const;
+/** Units of a goods item's weight or amount (the first is preselected). */
+export const WEIGHT_UNITS = ["kg", "ton", "quintal", "gram", "litre", "pieces", "boxes", "bags"] as const;
 
 export const STATUS_META: Record<TripStatus, { label: string; className: string; dot: string }> = {
   scheduled: { label: "Scheduled", className: "bg-slate-100 text-slate-700", dot: "bg-slate-400" },

@@ -4,7 +4,7 @@ import { get, limitToLast, onValue, orderByKey, query, ref } from "firebase/data
 import { doc, getDoc } from "firebase/firestore";
 import { useEffect, useRef, useState } from "react";
 import { fb } from "./firebase/client";
-import type { LivePoint, LngLat, TrackResponse } from "./types";
+import type { LivePoint, LngLat, TrackDetails, TrackResponse } from "./types";
 
 interface LiveTrip {
   latest: LivePoint | null;
@@ -74,10 +74,13 @@ export function useLiveTrip(tripId: string | undefined, enabled = true): LiveTri
 }
 
 export interface TrackState {
-  phase: "loading" | "ready" | "invalid";
+  /** "denied": a private link refused this person (not on the owner's list, or removed from it). */
+  phase: "loading" | "ready" | "invalid" | "denied";
   data: TrackResponse | null;
   route: LngLat[];
   path: LngLat[];
+  /** Driver, vehicle and goods, from the first request. */
+  details: TrackDetails | null;
   /** True when the last refresh failed; the previous data is still shown. */
   offline: boolean;
 }
@@ -86,8 +89,17 @@ export interface TrackState {
  * Public tracking data for a link token, refreshed on a timer.
  * No login is involved: the server only ever returns status, ETA and map data.
  */
-export function useTrack(token: string | null | undefined, intervalMs: number, withPath = true): TrackState {
-  const [state, setState] = useState<TrackState>({ phase: "loading", data: null, route: [], path: [], offline: false });
+/**
+ * [endpoint] and [authToken] are for the private link: its own API, called with the viewer's
+ * phone sign-in. The public link uses neither.
+ */
+export function useTrack(
+  token: string | null | undefined,
+  intervalMs: number,
+  withPath = true,
+  { endpoint, authToken }: { endpoint?: string; authToken?: () => Promise<string | null> } = {},
+): TrackState {
+  const [state, setState] = useState<TrackState>({ phase: "loading", data: null, route: [], path: [], details: null, offline: false });
   const loadedFull = useRef(false);
 
   useEffect(() => {
@@ -100,10 +112,18 @@ export function useTrack(token: string | null | undefined, intervalMs: number, w
       let again = true;
       try {
         const full = withPath && !loadedFull.current;
-        const res = await fetch(`/api/track/${token}${full ? "?full=1" : ""}`, { cache: "no-store" });
+        const auth = authToken ? await authToken() : null;
+        const res = await fetch(`${endpoint ?? `/api/track/${token}`}${full ? "?full=1" : ""}`, {
+          cache: "no-store",
+          headers: auth ? { Authorization: `Bearer ${auth}` } : undefined,
+        });
         if (cancelled) return;
         if (res.status === 404) {
           setState((s) => ({ ...s, phase: "invalid" }));
+          return;
+        }
+        if (res.status === 401 || res.status === 403) {
+          setState((s) => ({ ...s, phase: "denied" }));
           return;
         }
         if (!res.ok) throw new Error("failed");
@@ -118,7 +138,14 @@ export function useTrack(token: string | null | undefined, intervalMs: number, w
           if (data.latest && (!last || last[0] !== data.latest.lng || last[1] !== data.latest.lat)) {
             path = [...path, [data.latest.lng, data.latest.lat]];
           }
-          return { phase: "ready", data, route: full ? (data.route ?? []) : s.route, path, offline: false };
+          return {
+            phase: "ready",
+            data,
+            route: full ? (data.route ?? []) : s.route,
+            path,
+            details: full ? (data.details ?? null) : s.details,
+            offline: false,
+          };
         });
       } catch {
         if (!cancelled) setState((s) => ({ ...s, offline: true }));
@@ -132,7 +159,7 @@ export function useTrack(token: string | null | undefined, intervalMs: number, w
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [token, intervalMs, withPath]);
+  }, [token, intervalMs, withPath, endpoint, authToken]);
 
   return state;
 }

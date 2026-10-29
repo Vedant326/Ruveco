@@ -4,6 +4,7 @@ import { adminDb } from "@/lib/firebase/admin";
 import { todayIST } from "@/lib/format";
 import { ApiError, handle, requireRole } from "@/lib/server/http";
 import { downsample, getRoute } from "@/lib/server/routing";
+import { goodsList, toStoredGoods } from "@/lib/server/goods";
 import { sendPush } from "@/lib/server/push";
 import { addNotification, syncTripAccess, type NotificationInput } from "@/lib/server/trips";
 import type { Trip } from "@/lib/types";
@@ -26,6 +27,7 @@ const schema = z
     receiverName: z.string().trim().min(1, "Enter the receiver name").max(80),
     receiverPhone: z.string().regex(PHONE_RE, "Enter a valid 10-digit receiver phone"),
     goodsDescription: z.string().trim().max(200).default(""),
+    goods: goodsList.default([]),
   })
   .refine((v) => v.deliveryAt > v.pickupAt, "Delivery time must be after pickup time")
   .refine(
@@ -72,7 +74,7 @@ export const POST = handle(async (req) => {
     receiverName: body.receiverName,
     receiverPhone: body.receiverPhone,
     goodsDescription: body.goodsDescription,
-    goods: [],
+    goods: toStoredGoods(body.goods),
     documents: [],
     status: "scheduled",
     cancelReason: null,

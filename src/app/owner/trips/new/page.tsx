@@ -9,6 +9,7 @@ import { PageHeader } from "@/components/app-shell";
 import { useOwnerData } from "@/components/data-providers";
 import { PlaceInput } from "@/components/place-input";
 import { AddDocumentSheet, uploadTripDocument, type PendingDocument } from "@/components/trip/documents";
+import { AddGoodsSheet, GoodsTable, type NewGoodsItem } from "@/components/trip/goods-card";
 import { Button } from "@/components/ui/button";
 import { buttonClass } from "@/components/ui/button-class";
 import { Field, Input, Textarea } from "@/components/ui/field";
@@ -45,6 +46,8 @@ export default function CreateTripPage() {
   const [receiverName, setReceiverName] = useState("");
   const [receiverPhone, setReceiverPhone] = useState("");
   const [goods, setGoods] = useState("");
+  const [goodsItems, setGoodsItems] = useState<NewGoodsItem[]>([]);
+  const [goodsOpen, setGoodsOpen] = useState(false);
   const [documents, setDocuments] = useState<PendingDocument[]>([]);
   const [docOpen, setDocOpen] = useState(false);
   const [errors, setErrors] = useState<Partial<Record<ErrorKey, string>>>({});
@@ -127,6 +130,7 @@ export default function CreateTripPage() {
           receiverName: receiverName.trim(),
           receiverPhone,
           goodsDescription: goods.trim(),
+          goods: goodsItems,
         },
       });
 
@@ -286,6 +290,20 @@ export default function CreateTripPage() {
 
           <div className="mt-4">
             <div className="mb-2 flex items-center justify-between">
+              <span className="text-sm font-semibold text-ink">Goods items</span>
+              <Button size="sm" variant="secondary" icon={<Plus className="h-4 w-4" />} onClick={() => setGoodsOpen(true)}>
+                Add item
+              </Button>
+            </div>
+            {goodsItems.length === 0 ? (
+              <p className="text-sm text-muted">Each item with its weight (kg, ton, quintal...) and quantity. You can also add them later.</p>
+            ) : (
+              <GoodsTable goods={goodsItems} onRemove={(i) => setGoodsItems((list) => list.filter((_, j) => j !== i))} />
+            )}
+          </div>
+
+          <div className="mt-4">
+            <div className="mb-2 flex items-center justify-between">
               <span className="text-sm font-semibold text-ink">Documents</span>
               <Button size="sm" variant="secondary" icon={<Plus className="h-4 w-4" />} onClick={() => setDocOpen(true)}>
                 Add
@@ -329,6 +347,7 @@ export default function CreateTripPage() {
         </div>
       </div>
 
+      <AddGoodsSheet open={goodsOpen} onClose={() => setGoodsOpen(false)} onAdd={(item) => setGoodsItems((list) => [...list, item])} />
       <AddDocumentSheet types={DOC_TYPES} open={docOpen} onClose={() => setDocOpen(false)} onAdd={(doc) => setDocuments((list) => [...list, doc])} />
     </form>
   );

@@ -12,6 +12,7 @@ import { DocumentsCard } from "@/components/trip/documents";
 import { FeedbackCard } from "@/components/trip/feedback-card";
 import { FuelCard } from "@/components/trip/fuel-card";
 import { GoodsCard } from "@/components/trip/goods-card";
+import { OwnerContact } from "@/components/trip/owner-contact";
 import { RouteCard } from "@/components/trip/route-card";
 import { VehicleDocumentsCard } from "@/components/trip/vehicle-documents";
 import { TripMap } from "@/components/trip-map";
@@ -156,7 +157,11 @@ function ActiveTrip({ trip }: { trip: Trip }) {
       <RouteCard trip={trip} />
       <VehicleDocumentsCard trip={trip} />
       <FuelCard trip={trip} canEdit />
-      <GoodsCard trip={trip} editable />
+      <Card>
+        <SectionTitle>Owner</SectionTitle>
+        <OwnerContact trip={trip} />
+      </Card>
+      <GoodsCard trip={trip} editable={false} />
       <DocumentsCard trip={trip} canAdd />
 
       <div className="sticky bottom-20 z-20 md:bottom-4">
@@ -242,10 +247,13 @@ export default function DriverTripPage() {
                 <Detail label="Truck type">{trip.vehicleType}</Detail>
               </dl>
             </div>
+            <div className="mt-4 border-t border-line pt-4">
+              <OwnerContact trip={trip} />
+            </div>
           </Card>
 
           {trip.status === "scheduled" && <VehicleDocumentsCard trip={trip} />}
-          <GoodsCard trip={trip} editable={trip.status === "scheduled"} />
+          <GoodsCard trip={trip} editable={false} />
           <DocumentsCard trip={trip} canAdd />
 
           {trip.status === "scheduled" && <StartTrip trip={trip} blocked={Boolean(activeTrip)} />}

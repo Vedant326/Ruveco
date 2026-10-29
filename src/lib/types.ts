@@ -52,11 +52,18 @@ export interface DriverSummary {
   phone: string;
 }
 
+/**
+ * A goods item: name, weight in kg or ton, and an optional quantity.
+ * Items saved before weights existed have only `quantity` with its `unit` (kg, ton, pieces or boxes).
+ */
 export interface GoodsItem {
   id: string;
   item: string;
-  quantity: number;
-  unit: string;
+  weight?: number | null;
+  /** One of WEIGHT_UNITS: kg, ton, quintal, gram, litre, pieces, boxes or bags. */
+  weightUnit?: string | null;
+  quantity?: number | null;
+  unit?: string | null;
 }
 
 export interface TripDocument {
@@ -108,6 +115,9 @@ export interface Trip {
   completedAt: number | null;
   cancelledAt: number | null;
   trackingToken: string | null;
+  /** Private tracking link: only these phone numbers can open it, after an OTP. Owner only. */
+  privateToken?: string | null;
+  privateViewers?: string[];
   /** Given after the trip is completed, once by each side. Each side sees the other's. */
   feedback?: { owner?: TripFeedback; driver?: TripFeedback };
   createdAt: number;
@@ -167,4 +177,17 @@ export interface TrackResponse {
   serverTime: number;
   route?: LngLat[];
   path?: LngLat[];
+  /** Sent with the first (full) request only. */
+  details?: TrackDetails;
+}
+
+/** What the receiver sees about the delivery: who is driving it and what it carries. */
+export interface TrackDetails {
+  companyName: string;
+  driverName: string;
+  driverPhone: string;
+  vehicleNumber: string;
+  vehicleType: VehicleType;
+  goodsDescription: string;
+  goods: Omit<GoodsItem, "id">[];
 }

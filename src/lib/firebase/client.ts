@@ -43,7 +43,8 @@ export function fb(): Services {
   if (services) return services;
   if (!firebaseConfigured) throw new Error("Firebase is not configured. Fill in .env.local.");
 
-  const app = getApps().length ? getApp() : initializeApp(config);
+  // Found by name: the private tracking page also has its own app (see viewerAuth).
+  const app = getApps().some((a) => a.name === "[DEFAULT]") ? getApp() : initializeApp(config);
   const auth = getAuth(app);
   const db = getFirestore(app);
   const rtdb = getDatabase(app);
@@ -59,4 +60,22 @@ export function fb(): Services {
 
   services = { app, auth, db, rtdb, storage };
   return services;
+}
+
+let viewer: Auth | null = null;
+
+/**
+ * Sign-in for people opening a private tracking link (phone and OTP). A separate Firebase app,
+ * so it never replaces the Ruveco account signed in on the same browser.
+ */
+export function viewerAuth(): Auth {
+  if (viewer) return viewer;
+  const name = "ruveco-viewer";
+  const app = getApps().find((a) => a.name === name) ?? initializeApp(config, name);
+  viewer = getAuth(app);
+  if (usingEmulators) {
+    const host = typeof window === "undefined" ? "127.0.0.1" : window.location.hostname;
+    connectAuthEmulator(viewer, `http://${host}:9099`, { disableWarnings: true });
+  }
+  return viewer;
 }

@@ -2,9 +2,10 @@ import { randomUUID } from "node:crypto";
 import { FieldValue } from "firebase-admin/firestore";
 import type { NextRequest } from "next/server";
 import { z } from "zod";
-import { ALLOWED_FILE_TYPES, DOC_TYPES, GOODS_UNITS } from "@/lib/constants";
+import { ALLOWED_FILE_TYPES, DOC_TYPES, PHONE_RE } from "@/lib/constants";
 import { adminBucket, adminDb } from "@/lib/firebase/admin";
 import { ApiError, handle, loadProfile, requireSession, type Session } from "@/lib/server/http";
+import { goodsList, toStoredGoods } from "@/lib/server/goods";
 import { sendPush } from "@/lib/server/push";
 import {
   addNotification,
@@ -22,17 +23,7 @@ const cancelSchema = z.object({
   reason: z.string().trim().min(1, "Enter a reason for cancelling").max(200),
 });
 
-const goodsSchema = z.object({
-  goods: z
-    .array(
-      z.object({
-        item: z.string().trim().min(1, "Enter the item name").max(80),
-        quantity: z.number().positive("Quantity must be more than 0").max(1_000_000),
-        unit: z.enum(GOODS_UNITS),
-      }),
-    )
-    .max(50, "A trip can have up to 50 goods items"),
-});
+const goodsSchema = z.object({ goods: goodsList });
 
 // Payment received: the owner's figure.
 const figuresSchema = z.object({
@@ -52,6 +43,14 @@ const fuelSchema = z.object({
 });
 
 const fuelRemoveSchema = z.object({ entryId: z.string().min(1) });
+
+// Phone numbers allowed to open the private tracking link.
+const privateLinkSchema = z.object({
+  phones: z
+    .array(z.string().regex(PHONE_RE, "Enter a valid 10-digit mobile number"))
+    .max(20, "A private link can have up to 20 phone numbers")
+    .transform((phones) => [...new Set(phones)]),
+});
 
 const documentSchema = z.object({
   type: z.enum(["eway", "gst", "other"]),
@@ -87,6 +86,7 @@ export const POST = handle(async (req: NextRequest, ctx: Ctx) => {
       if (!isOwner) throw new ApiError(403, "Only the owner can cancel this trip.");
       return cancelTrip(trip, cancelSchema.parse(await req.json()).reason);
     case "goods":
+      if (!isOwner) throw new ApiError(403, "Only the owner can change the goods.");
       return saveGoods(trip, goodsSchema.parse(await req.json()).goods);
     case "figures":
       if (!isOwner) throw new ApiError(403, "Only the owner can edit the payment received.");
@@ -100,6 +100,9 @@ export const POST = handle(async (req: NextRequest, ctx: Ctx) => {
       return removeFuel(trip, fuelRemoveSchema.parse(await req.json()).entryId);
     case "document":
       return addDocument(trip, session, documentSchema.parse(await req.json()));
+    case "private-link":
+      if (!isOwner) throw new ApiError(403, "Only the owner can share a private link.");
+      return savePrivateLink(trip, privateLinkSchema.parse(await req.json()).phones);
     case "feedback":
       return addFeedback(trip, session, isOwner ? "owner" : "driver", feedbackSchema.parse(await req.json()));
     default:
@@ -202,7 +205,7 @@ async function saveGoods(trip: Trip, goods: z.infer<typeof goodsSchema>["goods"]
   }
   await adminDb()
     .doc(`trips/${trip.id}`)
-    .update({ goods: goods.map((g) => ({ id: randomUUID(), ...g })) });
+    .update({ goods: toStoredGoods(goods) });
 }
 
 /** Safe to call again for the same file (the apps retry it), so a file is never listed twice. */
@@ -328,4 +331,11 @@ async function removeFuel(trip: Trip, entryId: string) {
     if (next.length === entries.length) return;
     tx.update(ref, { fuelEntries: next, ...fuelTotals(next) });
   });
+}
+
+/** Saves who may open the private link; the link itself is made the first time. */
+async function savePrivateLink(trip: Trip, phones: string[]) {
+  const privateToken = trip.privateToken || newTrackingToken();
+  await adminDb().doc(`trips/${trip.id}`).update({ privateToken, privateViewers: phones });
+  return { token: privateToken, phones };
 }
