@@ -160,7 +160,14 @@ export default function LandingPage() {
 
       <footer className="mx-auto flex w-full max-w-5xl items-center justify-between px-5 py-6 text-xs text-muted">
         <Logo size="sm" />
-        <span>Live trip tracking for transport</span>
+        <nav className="flex gap-4">
+          <Link href="/privacy" className="hover:text-brand-700">
+            Privacy policy
+          </Link>
+          <Link href="/delete-account" className="hover:text-brand-700">
+            Delete account
+          </Link>
+        </nav>
       </footer>
     </div>
   );
