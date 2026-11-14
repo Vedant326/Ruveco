@@ -22,7 +22,22 @@ export default function DeleteAccountPage() {
         </p>
       }
     >
-      <Section title="How to request deletion">
+      <Section title="Delete your account in the app">
+        <ol className="list-decimal space-y-2 pl-5">
+          <li>Open the Ruveco app and sign in.</li>
+          <li>
+            Tap the <strong>round icon with your initial</strong> at the top of the screen to open <strong>Account</strong>.
+          </li>
+          <li>
+            Tap <strong>Delete account</strong>, read what will be deleted, and confirm.
+          </li>
+        </ol>
+        <p>
+          Your account and data are deleted right away, and you are signed out. If a trip is still in progress, end it first.
+        </p>
+      </Section>
+
+      <Section title="Or request deletion by email">
         <ol className="list-decimal space-y-2 pl-5">
           <li>
             Send an email to <ContactLink href={`mailto:${EMAIL}`}>{EMAIL}</ContactLink> with the subject{" "}
@@ -62,7 +77,7 @@ export default function DeleteAccountPage() {
           <li>
             For drivers: trips you drove for a company stay in that company&rsquo;s records, because the owner needs them for their
             business accounts. Your name and phone number on those trips stay with the trip, but your verification photos and
-            profile are deleted.
+            profile are deleted. Trips scheduled for you that have not started are cancelled, and the owner is told.
           </li>
           <li>Information we must keep by law, only for as long as the law requires.</li>
           <li>Copies in our backups, which are removed automatically within 30 days.</li>

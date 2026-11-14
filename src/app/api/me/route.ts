@@ -1,4 +1,5 @@
 import { adminDb } from "@/lib/firebase/admin";
+import { deleteAccount } from "@/lib/server/account-deletion";
 import { handle, requireSession } from "@/lib/server/http";
 
 // Called after every sign-in. Creates the user record the first time.
@@ -19,4 +20,10 @@ export const POST = handle(async (req) => {
   };
   await ref.set(profile);
   return { profile: { ...profile, uid: session.uid } };
+});
+
+// "Delete account" in the app. Removes the account and its data (see /delete-account).
+export const DELETE = handle(async (req) => {
+  const session = await requireSession(req);
+  await deleteAccount(session.uid);
 });
